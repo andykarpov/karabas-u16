@@ -1,0 +1,229 @@
+# -------------------------------------------------------------------------- #
+#
+# Copyright (C) 1991-2014 Altera Corporation
+# Your use of Altera Corporation's design tools, logic functions 
+# and other software and tools, and its AMPP partner logic 
+# functions, and any output files from any of the foregoing 
+# (including device programming or simulation files), and any 
+# associated documentation or information are expressly subject 
+# to the terms and conditions of the Altera Program License 
+# Subscription Agreement, Altera MegaCore Function License 
+# Agreement, or other applicable license agreement, including, 
+# without limitation, that your use is for the sole purpose of 
+# programming logic devices manufactured by Altera and sold by 
+# Altera or its authorized distributors.  Please refer to the 
+# applicable agreement for further details.
+#
+# -------------------------------------------------------------------------- #
+#
+# Quartus II 32-bit
+# Version 13.1.4 Build 182 03/12/2014 SJ Web Edition
+# Date created = 12:26:48  August 14, 2017
+#
+# -------------------------------------------------------------------------- #
+#
+# Notes:
+#
+# 1) The default values for assignments are stored in the file:
+#		u16_speccy_revC_assignment_defaults.qdf
+#    If this file doesn't exist, see file:
+#		assignment_defaults.qdf
+#
+# 2) Altera recommends that you do not modify this file. This
+#    file is updated automatically by the Quartus II software
+#    and any changes you make may be lost or overwritten.
+#
+# -------------------------------------------------------------------------- #
+
+
+set_global_assignment -name FAMILY "Cyclone IV E"
+set_global_assignment -name DEVICE EP4CE22E22C8
+set_global_assignment -name TOP_LEVEL_ENTITY speccy
+set_global_assignment -name ORIGINAL_QUARTUS_VERSION 13.1
+set_global_assignment -name PROJECT_CREATION_TIME_DATE "12:26:48  AUGUST 14, 2017"
+set_global_assignment -name LAST_QUARTUS_VERSION 13.1
+#==================CLK===========================
+set_location_assignment PIN_25 -to CLK_50MHZ
+
+#==================SDRAM=========================
+set_location_assignment PIN_43 -to SDRAM_CLK
+set_location_assignment PIN_119 -to SDRAM_DQML
+set_location_assignment PIN_64 -to SDRAM_DQMH
+set_location_assignment PIN_101 -to SDRAM_BA[0]
+set_location_assignment PIN_100 -to SDRAM_BA[1]
+set_location_assignment PIN_98 -to SDRAM_A[0]
+set_location_assignment PIN_86 -to SDRAM_A[1]
+set_location_assignment PIN_87 -to SDRAM_A[2]
+set_location_assignment PIN_105 -to SDRAM_A[3]
+set_location_assignment PIN_76 -to SDRAM_A[4]
+set_location_assignment PIN_77 -to SDRAM_A[5]
+set_location_assignment PIN_80 -to SDRAM_A[6]
+set_location_assignment PIN_83 -to SDRAM_A[7]
+set_location_assignment PIN_85 -to SDRAM_A[8]
+set_location_assignment PIN_67 -to SDRAM_A[9]
+set_location_assignment PIN_99 -to SDRAM_A[10]
+set_location_assignment PIN_66 -to SDRAM_A[11]
+set_location_assignment PIN_65 -to SDRAM_A[12]
+set_location_assignment PIN_142 -to SDRAM_DQ[0]
+set_location_assignment PIN_141 -to SDRAM_DQ[1]
+set_location_assignment PIN_137 -to SDRAM_DQ[2]
+set_location_assignment PIN_136 -to SDRAM_DQ[3]
+set_location_assignment PIN_135 -to SDRAM_DQ[4]
+set_location_assignment PIN_125 -to SDRAM_DQ[5]
+set_location_assignment PIN_121 -to SDRAM_DQ[6]
+set_location_assignment PIN_120 -to SDRAM_DQ[7]
+set_location_assignment PIN_60 -to SDRAM_DQ[8]
+set_location_assignment PIN_59 -to SDRAM_DQ[9]
+set_location_assignment PIN_58 -to SDRAM_DQ[10]
+set_location_assignment PIN_46 -to SDRAM_DQ[11]
+set_location_assignment PIN_44 -to SDRAM_DQ[12]
+set_location_assignment PIN_31 -to SDRAM_DQ[13]
+set_location_assignment PIN_42 -to SDRAM_DQ[14]
+set_location_assignment PIN_30 -to SDRAM_DQ[15]
+set_location_assignment PIN_104 -to SDRAM_NWE
+set_location_assignment PIN_103 -to SDRAM_NRAS
+set_location_assignment PIN_106 -to SDRAM_NCAS
+
+#=================FLASH=========================
+set_location_assignment PIN_6 -to ASDO
+set_location_assignment PIN_13 -to DATA0
+set_location_assignment PIN_12 -to DCLK
+set_location_assignment PIN_8 -to NCSO
+set_instance_assignment -name IO_MAXIMUM_TOGGLE_RATE "0 MHz" -to DCLK
+
+#=================SD CARD=======================
+set_location_assignment PIN_110 -to SD_CLK
+set_location_assignment PIN_111 -to SD_SI
+set_location_assignment PIN_126 -to SD_SO
+set_location_assignment PIN_114 -to SD_NCS
+
+#=================HDMI==========================                 
+set_location_assignment PIN_10 -to TMDS[7]
+set_location_assignment PIN_11 -to TMDS[6]
+set_location_assignment PIN_144 -to TMDS[5]
+set_location_assignment PIN_143 -to TMDS[4]
+set_location_assignment PIN_133 -to TMDS[3]
+set_location_assignment PIN_132 -to TMDS[2]
+set_location_assignment PIN_113 -to TMDS[1]
+set_location_assignment PIN_112 -to TMDS[0]
+
+#=================VNC2==========================                 
+set_location_assignment PIN_50 -to USB_SI
+set_location_assignment PIN_32 -to USB_NRESET
+set_location_assignment PIN_51 -to USB_NCS
+set_location_assignment PIN_53 -to USB_TX
+set_location_assignment PIN_55 -to USB_IO1
+
+#=================I2C===========================                 
+set_location_assignment PIN_7 -to I2C_SDA
+set_location_assignment PIN_28 -to I2C_SCL
+
+#=================ETH===========================                 
+set_location_assignment PIN_24 -to ETH_SO
+set_location_assignment PIN_23 -to ETH_NINT
+set_location_assignment PIN_33 -to ETH_NCS
+
+#=================SOUND=========================                 
+set_location_assignment PIN_68 -to OUT_L
+set_location_assignment PIN_69 -to OUT_R
+
+#=================MISC==========================
+set_global_assignment -name STRATIX_DEVICE_IO_STANDARD "3.3-V LVTTL"
+set_global_assignment -name ENABLE_OCT_DONE OFF
+set_global_assignment -name USE_CONFIGURATION_DEVICE ON
+set_global_assignment -name CYCLONEIII_CONFIGURATION_DEVICE EPCS16
+set_global_assignment -name CRC_ERROR_OPEN_DRAIN OFF
+set_global_assignment -name RESERVE_ALL_UNUSED_PINS_WEAK_PULLUP "AS INPUT TRI-STATED"
+set_global_assignment -name CYCLONEII_RESERVE_NCEO_AFTER_CONFIGURATION "USE AS REGULAR IO"
+set_global_assignment -name RESERVE_DATA0_AFTER_CONFIGURATION "USE AS REGULAR IO"
+set_global_assignment -name RESERVE_DATA1_AFTER_CONFIGURATION "USE AS REGULAR IO"
+set_global_assignment -name RESERVE_FLASH_NCE_AFTER_CONFIGURATION "USE AS REGULAR IO"
+set_global_assignment -name RESERVE_DCLK_AFTER_CONFIGURATION "USE AS REGULAR IO"
+set_global_assignment -name OUTPUT_IO_TIMING_NEAR_END_VMEAS "HALF VCCIO" -rise
+set_global_assignment -name OUTPUT_IO_TIMING_NEAR_END_VMEAS "HALF VCCIO" -fall
+set_global_assignment -name OUTPUT_IO_TIMING_FAR_END_VMEAS "HALF SIGNAL SWING" -rise
+set_global_assignment -name OUTPUT_IO_TIMING_FAR_END_VMEAS "HALF SIGNAL SWING" -fall
+set_global_assignment -name POWER_PRESET_COOLING_SOLUTION "23 MM HEAT SINK WITH 200 LFPM AIRFLOW"
+set_global_assignment -name POWER_BOARD_THERMAL_MODEL "NONE (CONSERVATIVE)"
+set_global_assignment -name DEVICE_FILTER_PACKAGE TQFP
+set_global_assignment -name DEVICE_FILTER_PIN_COUNT 144
+set_global_assignment -name SYNTH_TIMING_DRIVEN_SYNTHESIS ON
+set_global_assignment -name DEVICE_FILTER_SPEED_GRADE 8
+
+set_global_assignment -name PARTITION_NETLIST_TYPE SOURCE -section_id Top
+set_global_assignment -name PARTITION_FITTER_PRESERVATION_LEVEL PLACEMENT_AND_ROUTING -section_id Top
+set_global_assignment -name PARTITION_COLOR 16764057 -section_id Top
+set_global_assignment -name MIN_CORE_JUNCTION_TEMP 0
+set_global_assignment -name MAX_CORE_JUNCTION_TEMP 85
+set_global_assignment -name VHDL_FILE ../rtl/hid/receiver.vhd
+set_global_assignment -name VHDL_FILE ../rtl/hid/deserializer.vhd
+set_global_assignment -name VHDL_FILE ../rtl/video/scan_converter.vhd
+set_global_assignment -name VHDL_FILE ../rtl/video/ram_scan.vhd
+set_global_assignment -name QIP_FILE ../rtl/video/ram_scan.qip
+set_global_assignment -name VHDL_FILE ../rtl/speccy.vhd
+set_global_assignment -name VHDL_FILE ../rtl/video/video.vhd
+set_global_assignment -name VHDL_FILE ../rtl/turbosound/turbosound.vhd
+set_global_assignment -name VHDL_FILE ../rtl/ssg/ay8910.vhd
+set_global_assignment -name VHDL_FILE ../rtl/spi/spi.vhd
+set_global_assignment -name VHDL_FILE ../rtl/soundrive/soundrive.vhd
+set_global_assignment -name VHDL_FILE ../rtl/sdram/sdram.vhd
+set_global_assignment -name VHDL_FILE ../rtl/sd/zcontroller.vhd
+set_global_assignment -name VHDL_FILE ../rtl/rtc/mc146818a.vhd
+set_global_assignment -name VHDL_FILE ../rtl/ram/altram2.vhd
+set_global_assignment -name QIP_FILE ../rtl/ram/altram2.qip
+set_global_assignment -name VHDL_FILE ../rtl/ram/altram1.vhd
+set_global_assignment -name QIP_FILE ../rtl/ram/altram1.qip
+set_global_assignment -name VHDL_FILE ../rtl/ram/altram0.vhd
+set_global_assignment -name QIP_FILE ../rtl/ram/altram0.qip
+set_global_assignment -name VHDL_FILE ../rtl/pll/altpll0.vhd
+set_global_assignment -name QIP_FILE ../rtl/pll/altpll0.qip
+set_global_assignment -name VHDL_FILE ../rtl/i2c/i2c.vhd
+set_global_assignment -name VERILOG_FILE ../rtl/hdmi/hdmidataencoder.v
+set_global_assignment -name VHDL_FILE ../rtl/hdmi/hdmi.vhd
+set_global_assignment -name VHDL_FILE ../rtl/hdmi/encoder.vhd
+set_global_assignment -name VHDL_FILE ../rtl/hdmi/altddio_out1.vhd
+set_global_assignment -name QIP_FILE ../rtl/hdmi/altddio_out1.qip
+set_global_assignment -name VHDL_FILE ../rtl/divmmc/divmmc.vhd
+set_global_assignment -name VHDL_FILE ../rtl/dac/dac.vhd
+set_global_assignment -name VERILOG_FILE ../rtl/cpu/bus/bus_switch.v
+set_global_assignment -name VERILOG_FILE ../rtl/cpu/control/execute.v
+set_global_assignment -name VERILOG_FILE ../rtl/cpu/control/pla_decode.v
+set_global_assignment -name VERILOG_FILE ../rtl/cpu/toplevel/z80_top_direct_n.v
+set_global_assignment -name VERILOG_FILE ../rtl/cpu/alu/alu.v
+set_global_assignment -name VERILOG_FILE ../rtl/cpu/alu/alu_bit_select.v
+set_global_assignment -name VERILOG_FILE ../rtl/cpu/alu/alu_control.v
+set_global_assignment -name VERILOG_FILE ../rtl/cpu/alu/alu_core.v
+set_global_assignment -name VERILOG_FILE ../rtl/cpu/alu/alu_flags.v
+set_global_assignment -name VERILOG_FILE ../rtl/cpu/alu/alu_mux_2.v
+set_global_assignment -name VERILOG_FILE ../rtl/cpu/alu/alu_mux_2z.v
+set_global_assignment -name VERILOG_FILE ../rtl/cpu/alu/alu_mux_3z.v
+set_global_assignment -name VERILOG_FILE ../rtl/cpu/alu/alu_mux_4.v
+set_global_assignment -name VERILOG_FILE ../rtl/cpu/alu/alu_mux_8.v
+set_global_assignment -name VERILOG_FILE ../rtl/cpu/alu/alu_prep_daa.v
+set_global_assignment -name VERILOG_FILE ../rtl/cpu/alu/alu_select.v
+set_global_assignment -name VERILOG_FILE ../rtl/cpu/alu/alu_shifter_core.v
+set_global_assignment -name VERILOG_FILE ../rtl/cpu/alu/alu_slice.v
+set_global_assignment -name VERILOG_FILE ../rtl/cpu/bus/address_latch.v
+set_global_assignment -name VERILOG_FILE ../rtl/cpu/bus/address_mux.v
+set_global_assignment -name VERILOG_FILE ../rtl/cpu/bus/address_pins.v
+set_global_assignment -name VERILOG_FILE ../rtl/cpu/bus/bus_control.v
+set_global_assignment -name VERILOG_FILE ../rtl/cpu/bus/control_pins_n.v
+set_global_assignment -name VERILOG_FILE ../rtl/cpu/bus/data_pins.v
+set_global_assignment -name VERILOG_FILE ../rtl/cpu/bus/data_switch.v
+set_global_assignment -name VERILOG_FILE ../rtl/cpu/bus/data_switch_mask.v
+set_global_assignment -name VERILOG_FILE ../rtl/cpu/bus/inc_dec.v
+set_global_assignment -name VERILOG_FILE ../rtl/cpu/bus/inc_dec_2bit.v
+set_global_assignment -name VERILOG_FILE ../rtl/cpu/control/clk_delay.v
+set_global_assignment -name VERILOG_FILE ../rtl/cpu/control/decode_state.v
+set_global_assignment -name VERILOG_FILE ../rtl/cpu/control/interrupts.v
+set_global_assignment -name VERILOG_FILE ../rtl/cpu/control/ir.v
+set_global_assignment -name VERILOG_FILE ../rtl/cpu/control/memory_ifc.v
+set_global_assignment -name VERILOG_FILE ../rtl/cpu/control/pin_control.v
+set_global_assignment -name VERILOG_FILE ../rtl/cpu/control/resets.v
+set_global_assignment -name VERILOG_FILE ../rtl/cpu/control/sequencer.v
+set_global_assignment -name VERILOG_FILE ../rtl/cpu/registers/reg_control.v
+set_global_assignment -name VERILOG_FILE ../rtl/cpu/registers/reg_file.v
+set_global_assignment -name VERILOG_FILE ../rtl/cpu/registers/reg_latch.v
+
+
+set_instance_assignment -name PARTITION_HIERARCHY root_partition -to | -section_id Top
