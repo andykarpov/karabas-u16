@@ -396,9 +396,8 @@ port map(
 	D		=> cpu0_d_bus
 );
 
--- todo: only cpu0_rd_n = '1' / '0' ?
 cpu0_d_bus <= cpu0_di_bus when selector /= "11111" else (others => 'Z');
-cpu0_do_bus <= cpu0_d_bus;
+cpu0_do_bus <= cpu0_d_bus when selector = "11111" else (others => '1');
 
 -- Video Spectrum/Pentagon
 U2: entity work.video
