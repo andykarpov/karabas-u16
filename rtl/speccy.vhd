@@ -75,12 +75,6 @@ use IEEE.numeric_std.all;
 -- M9K 46K:
 -- 0000-B7FF
 
-
--- SRAM 512K: ОТКЛЮЧЕНО
--- 00000-07FFF		General Sound ROM 	32K
--- 08000-7FFFF		General Sound RAM 	480K
-
-
 -- SDRAM 32M:
 -- 0000000-1FFFFFF
 
@@ -243,6 +237,7 @@ signal rtc_wr		: std_logic;
 signal mc146818_wr	: std_logic;
 signal mc146818_a_bus	: std_logic_vector(5 downto 0);
 signal mc146818_do_bus	: std_logic_vector(7 downto 0);
+signal mc146818_busy		: std_logic;
 signal port_bff7	: std_logic;
 signal port_eff7_reg	: std_logic_vector(7 downto 0);
 -- TDA1543
@@ -308,6 +303,7 @@ signal areset		: std_logic;
 signal key_reset	: std_logic;
 signal locked		: std_logic;
 signal loader_act	: std_logic := '1';
+signal loader_act_reg : std_logic := '1';
 signal dos_act		: std_logic := '1';
 signal cpuclk		: std_logic;
 signal selector		: std_logic_vector(4 downto 0);
@@ -322,12 +318,12 @@ signal cntr_io_flag	: std_logic;
 signal cntr_addr_reg	: std_logic_vector(15 downto 0);
 signal cntr_data_reg	: std_logic_vector(7 downto 0);
 -- divmmc
-signal divmmc_do	: std_logic_vector(7 downto 0);
-signal divmmc_amap	: std_logic;
-signal divmmc_e3reg	: std_logic_vector(7 downto 0);	
-signal divmmc_cs_n	: std_logic;
-signal divmmc_sclk	: std_logic;
-signal divmmc_mosi	: std_logic;
+--signal divmmc_do	: std_logic_vector(7 downto 0);
+--signal divmmc_amap	: std_logic;
+--signal divmmc_e3reg	: std_logic_vector(7 downto 0);	
+--signal divmmc_cs_n	: std_logic;
+--signal divmmc_sclk	: std_logic;
+--signal divmmc_mosi	: std_logic;
 signal mux		: std_logic_vector(3 downto 0);
 
 signal VideoR		: std_logic_vector(1 downto 0);
@@ -554,17 +550,17 @@ port map (
 	DQ		=> SDRAM_DQ);
 
 -- I2C Controller
-U12: entity work.i2c
-port map (
-	RESET		=> reset,
-	CLK		=> clk_bus,
-	ENA		=> ena_0_4375mhz,
-	A		=> cpu0_a_bus(4),
-	DI		=> cpu0_do_bus,
-	DO		=> rtc_do_bus,
-	WR		=> rtc_wr,
-	I2C_SCL		=> I2C_SCL,
-	I2C_SDA		=> I2C_SDA);
+--U12: entity work.i2c
+--port map (
+--	RESET		=> reset,
+--	CLK		=> clk_bus,
+--	ENA		=> ena_0_4375mhz,
+--	A		=> cpu0_a_bus(4),
+--	DI		=> cpu0_do_bus,
+--	DO		=> rtc_do_bus,
+--	WR		=> rtc_wr,
+--	I2C_SCL		=> I2C_SCL,
+--	I2C_SDA		=> I2C_SDA);
 
 -- MC146818A
 U13: entity work.mc146818a
@@ -576,7 +572,11 @@ port map (
 	WR		=> mc146818_wr,
 	A		=> mc146818_a_bus,
 	DI		=> cpu0_do_bus,
-	DO		=> mc146818_do_bus);
+	DO		=> mc146818_do_bus,
+	I2C_SDA 	=> I2C_SDA,
+	I2C_SCL  => I2C_SCL,
+	BUSY 		=> mc146818_busy
+);
 
 -- Soundrive
 U14: entity work.soundrive
@@ -635,25 +635,25 @@ port map (
 --	TXD		=> RXD);
 
 -- divmmc interface
-U18: entity work.divmmc
-port map (
-	CLK		=> clk_bus,
-	EN		=> key_f(6),
-	RESET		=> reset,
-	ADDR		=> cpu0_a_bus,
-	DI		=> cpu0_do_bus,
-	DO		=> divmmc_do,
-	WR_N		=> cpu0_wr_n,
-	RD_N		=> cpu0_rd_n,
-	IORQ_N		=> cpu0_iorq_n,
-	MREQ_N		=> cpu0_mreq_n,
-	M1_N		=> cpu0_m1_n,
-	E3REG		=> divmmc_e3reg,
-	AMAP		=> divmmc_amap,
-	CS_N		=> divmmc_cs_n,
-	SCLK		=> divmmc_sclk,
-	MOSI		=> divmmc_mosi,
-	MISO		=> SD_SO);
+--U18: entity work.divmmc
+--port map (
+--	CLK		=> clk_bus,
+--	EN		=> key_f(6),
+--	RESET		=> reset,
+--	ADDR		=> cpu0_a_bus,
+--	DI		=> cpu0_do_bus,
+--	DO		=> divmmc_do,
+--	WR_N		=> cpu0_wr_n,
+--	RD_N		=> cpu0_rd_n,
+--	IORQ_N		=> cpu0_iorq_n,
+--	MREQ_N		=> cpu0_mreq_n,
+--	M1_N		=> cpu0_m1_n,
+--	E3REG		=> divmmc_e3reg,
+--	AMAP		=> divmmc_amap,
+--	CS_N		=> divmmc_cs_n,
+--	SCLK		=> divmmc_sclk,
+--	MOSI		=> divmmc_mosi,
+--	MISO		=> SD_SO);
 
 -- Delta-Sigma
 U19: entity work.dac
@@ -696,7 +696,8 @@ cpu0_nmi_n <= not kb_f_bus(5);				-- NMI
 -------------------------------------------------------------------------------
 -- SDRAM
 --sdr_wr <= '1' when cpu0_mreq_n = '0' and cpu0_wr_n = '0' and ((mux = "1001" and (divmmc_e3reg(1 downto 0) /= "11" and divmmc_e3reg(6) /= '1')) or mux(3 downto 2) = "11" or mux(3 downto 2) = "01" or mux(3 downto 1) = "101" or mux(3 downto 1) = "001") else '0';
-sdr_wr <= '1' when cpu0_mreq_n = '0' and cpu0_wr_n = '0' and (mux = "1001" or mux(3 downto 2) = "11" or mux(3 downto 2) = "01" or mux(3 downto 1) = "101" or mux(3 downto 1) = "001") else '0';
+--sdr_wr <= '1' when cpu0_mreq_n = '0' and cpu0_wr_n = '0' and (mux = "1001" or mux(3 downto 2) = "11" or mux(3 downto 2) = "01" or mux(3 downto 1) = "101" or mux(3 downto 1) = "001") else '0';
+sdr_wr <= '1' when cpu0_mreq_n = '0' and cpu0_wr_n = '0' and (mux(3 downto 2) = "01" or mux(3 downto 1) = "001") else '0';
 sdr_rd <= not (cpu0_mreq_n or cpu0_rd_n);
 sdr_rfsh <= not cpu0_rfsh_n;
 
@@ -717,9 +718,9 @@ end process;
 
 -------------------------------------------------------------------------------
 -- SD					
-SD_NCS	<= divmmc_cs_n when key_f(6) = '1' else zc_cs_n;
-SD_CLK 	<= divmmc_sclk when key_f(6) = '1' else zc_sclk;
-SD_SI 	<= divmmc_mosi when key_f(6) = '1' else zc_mosi;
+SD_NCS	<= zc_cs_n;
+SD_CLK 	<= zc_sclk;
+SD_SI 	<= zc_mosi;
 
 -------------------------------------------------------------------------------
 -- Регистры
@@ -730,9 +731,20 @@ begin
 		port_0001_reg <= (others => '0');	-- bit2 = (0:Loader ON, 1:Loader OFF); bit1 = (0:SRAM<->CPU0, 1:SRAM<->GS); bit0 = (0:M25P16, 1:ENC424J600)
 		loader_act <= '1';
 	elsif clk_bus'event and clk_bus = '1' then
-		if cpu0_iorq_n = '0' and cpu0_wr_n = '0' and cpu0_a_bus = X"0000" then port_0000_reg <= cpu0_do_bus; end if;
-		if cpu0_iorq_n = '0' and cpu0_wr_n = '0' and cpu0_a_bus = X"0001" then port_0001_reg <= cpu0_do_bus; end if;
-		if cpu0_m1_n = '0' and cpu0_mreq_n = '0' and cpu0_a_bus = X"0000" and port_0001_reg(2) = '1' then loader_act <= '0'; end if;
+		if cpu0_iorq_n = '0' and cpu0_wr_n = '0' and cpu0_a_bus = X"0000" and loader_act_reg = '1' then port_0000_reg <= cpu0_do_bus; end if;
+		if cpu0_iorq_n = '0' and cpu0_wr_n = '0' and cpu0_a_bus = X"0001" and loader_act_reg = '1' then port_0001_reg <= cpu0_do_bus; end if;
+		if cpu0_m1_n = '0' and cpu0_mreq_n = '0' and cpu0_a_bus = X"0000" and port_0001_reg(2) = '1' and loader_act_reg = '1' then loader_act <= '0'; end if;
+	end if;
+end process;
+
+process (areset, clk_bus, loader_act)
+begin
+	if areset = '1' then
+		loader_act_reg <= '1';
+	elsif clk_bus'event and clk_bus = '1' then
+		if loader_act = '0' then 
+			loader_act_reg <= '0';
+		end if;
 	end if;
 end process;
 
@@ -758,49 +770,36 @@ end process;
 
 ------------------------------------------------------------------------------
 -- Селектор
-mux <= ((divmmc_amap or divmmc_e3reg(7)) and key_f(6)) & cpu0_a_bus(15 downto 13);
+mux <= '0' & cpu0_a_bus(15 downto 13);
 
-process (mux, port_7ffd_reg, port_dffd_reg, port_0000_reg, ram_a_bus, cpu0_a_bus, dos_act, port_1ffd_reg, divmmc_e3reg, key_f)
+-- ram_a_bus:
+-- 4 3210 9876 5432 1098 7654 3210
+-- 0 00xx_xxxx xxxx_xxxx xxxx_xxxx	0000000-03FFFFF		RAM 	4MB
+-- 0 xxxx_xxxx xxxx_xxxx xxxx_xxxx	0400000-0FFFFFF		-----------
+-- 1 0000_0xxx xxxx_xxxx xxxx_xxxx	1000000-107FFFF		divMMC 512K
+-- 1 0000_1000 00xx_xxxx xxxx_xxxx	1080000-1003FFF		GLUK	16K
+-- 1 0000_1000 01xx_xxxx xxxx_xxxx	1084000-1007FFF		TR-DOS	16K
+-- 1 0000_1000 10xx_xxxx xxxx_xxxx	1088000-100BFFF		ROM'86	16K
+-- 1 0000_1000 11xx_xxxx xxxx_xxxx	108C000-100FFFF		ROM'82	16K
+
+-- todo: блокировку памяти >128Кб. Управляется через бит D1 порта #1FFD, как и в P1024.
+-- переписать менеджер памяти под стандарт пентагона или кая
+-- переделать лоадер соотв (или вынести его вообще в отдельный модуль)
+
+process (mux, port_7ffd_reg, port_dffd_reg, port_0000_reg, ram_a_bus, cpu0_a_bus, dos_act, port_1ffd_reg, loader_act_reg)
 begin
 	case mux is
-		when "0000" => ram_a_bus <= "100001000" & ((not(dos_act) and not(port_1ffd_reg(1))) or key_f(6)) & (port_7ffd_reg(4) and not(port_1ffd_reg(1))) & '0';	-- Seg0 ROM 0000-1FFF
-		when "0001" => ram_a_bus <= "100001000" & ((not(dos_act) and not(port_1ffd_reg(1))) or key_f(6)) & (port_7ffd_reg(4) and not(port_1ffd_reg(1))) & '1';	-- Seg0 ROM 2000-3FFF
-		when "1000" => ram_a_bus <= "100001001000";	-- ESXDOS ROM 0000-1FFF
-		when "1001" => ram_a_bus <= "100000" & divmmc_e3reg(5 downto 0);	-- ESXDOS RAM 2000-3FFF
-		when "0010"|"1010" => ram_a_bus <= "000000001010";	-- Seg1 RAM 4000-5FFF
-		when "0011"|"1011" => ram_a_bus <= "000000001011";	-- Seg1 RAM 6000-7FFF
-		when "0100"|"1100" => ram_a_bus <= "000000000100";	-- Seg2 RAM 8000-9FFF
-		when "0101"|"1101" => ram_a_bus <= "000000000101";	-- Seg2 RAM A000-BFFF
-		when "0110"|"1110" => ram_a_bus <= (port_dffd_reg and port_0000_reg) & port_7ffd_reg(2 downto 0) & '0';	-- Seg3 RAM C000-DFFF
-		when "0111"|"1111" => ram_a_bus <= (port_dffd_reg and port_0000_reg) & port_7ffd_reg(2 downto 0) & '1';	-- Seg3 RAM E000-FFFF
+		when "0000" => ram_a_bus <= "100001000" & (not(dos_act) and not(port_1ffd_reg(1))) & (port_7ffd_reg(4) and not(port_1ffd_reg(1))) & '0';	-- Seg0 ROM 0000-1FFF
+		when "0001" => ram_a_bus <= "100001000" & (not(dos_act) and not(port_1ffd_reg(1))) & (port_7ffd_reg(4) and not(port_1ffd_reg(1))) & '1';	-- Seg0 ROM 2000-3FFF
+		when "0010" => ram_a_bus <= "000000001010";	-- Seg1 RAM 4000-5FFF
+		when "0011" => ram_a_bus <= "000000001011";	-- Seg1 RAM 6000-7FFF
+		when "0100" => ram_a_bus <= "000000000100";	-- Seg2 RAM 8000-9FFF
+		when "0101" => ram_a_bus <= "000000000101";	-- Seg2 RAM A000-BFFF
+		when "0110" => ram_a_bus <= (port_dffd_reg and port_0000_reg) & port_7ffd_reg(2 downto 0) & '0';	-- Seg3 RAM C000-DFFF
+		when "0111" => ram_a_bus <= (port_dffd_reg and port_0000_reg) & port_7ffd_reg(2 downto 0) & '1';	-- Seg3 RAM E000-FFFF
 		when others => null;
 	end case;
 end process;
-
--------------------------------------------------------------------------------
--- SRAM <- GS/SYS
---process (cpu0_a_bus, port_0001_reg, cpu0_mreq_n, cpu0_wr_n, cpu0_do_bus, gs_mwe_n, gs_mdo, gs_ma)
---begin
---	if port_0001_reg(2) = '0' then
---		if cpu0_mreq_n = '0' and cpu0_wr_n = '0' then
---			SRAM_D <= cpu0_do_bus;
---		else
---			SRAM_D <= (others => 'Z');
---		end if;
---		SRAM_A <= "0000" & cpu0_a_bus(14 downto 0);
---		SRAM_WE_n <= cpu0_mreq_n or cpu0_wr_n or not cpu0_a_bus(15);
---	else
---		if gs_mwe_n = '0' then
---			SRAM_D <= gs_mdo;
---		else
---			SRAM_D <= (others => 'Z');
---		end if;
---		SRAM_A <= gs_ma;
---		SRAM_WE_n <= gs_mwe_n;
---	end if;
---end process;
---
---SRAM_OE_n	<= '0';
 
 -------------------------------------------------------------------------------
 -- ENC424J600 <> MP25P16
@@ -848,7 +847,7 @@ zc_rd 		<= '1' when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_a_bus(7 down
 -------------------------------------------------------------------------------
 -- Функциональные клавиши Fx
 
--- F3 = 3.5/7.0MHz, F4 = CPU RESET, F5 = NMI, F6 = divMMC, F7 = рамка, F8 = перефирийный контроллер, F9 = turbo 7.0/14.0MHz, F11 = soundrive, F12 = видео режим 0: Spectrum; 1: Pentagon;
+-- F4 = CPU RESET, F5 = NMI, F11 = soundrive
 process (clk_bus, key, kb_f_bus, key_f)
 begin
 	if (clk_bus'event and clk_bus = '1') then
@@ -862,7 +861,7 @@ end process;
 -------------------------------------------------------------------------------
 -- Шина данных CPU0
 process (selector, rom_do_bus, sdr_do_bus, spi_do_bus, spi_busy, rtc_do_bus, mc146818_do_bus, kb_do_bus, zc_do_bus, ms_but_bus, ms_x_bus, ms_y_bus, kb_joy_bus, ssg_cn0_bus, ssg_cn1_bus, uart_tx_busy, uart_rx_error,
-		 uart_rx_avail, uart_do_bus, gs_do_bus, divmmc_do, port_7ffd_reg, port_dffd_reg, vid_attr)
+		 uart_rx_avail, uart_do_bus, gs_do_bus, port_7ffd_reg, port_dffd_reg, vid_attr)
 begin
 	case selector is
 		when "00000" => cpu0_di_bus <= rom_do_bus;
@@ -870,7 +869,7 @@ begin
 		when "00010" => cpu0_di_bus <= sdr_do_bus;
 		when "00011" => cpu0_di_bus <= spi_do_bus;
 		when "00100" => cpu0_di_bus <= spi_busy & "1111111";
-		when "00101" => cpu0_di_bus <= rtc_do_bus;
+--		when "00101" => cpu0_di_bus <= rtc_do_bus;
 		when "00110" => cpu0_di_bus <= mc146818_do_bus;
 		when "00111" => cpu0_di_bus <= "111" & kb_do_bus;
 		when "01000" => cpu0_di_bus <= zc_do_bus;
@@ -884,7 +883,7 @@ begin
 --		when "10000" => cpu0_di_bus <= uart_tx_busy & CBUS4 & "1111" & uart_rx_error & uart_rx_avail;
 --		when "10001" => cpu0_di_bus <= uart_do_bus;
 --		when "10010" => cpu0_di_bus <= gs_do_bus;
-		when "10011" => cpu0_di_bus <= divmmc_do;
+--		when "10011" => cpu0_di_bus <= divmmc_do;
 		when "10100" => cpu0_di_bus <= port_7ffd_reg;
 		when "10101" => cpu0_di_bus <= port_dffd_reg;
 		when "10110" => cpu0_di_bus <= vid_attr;
@@ -895,9 +894,9 @@ end process;
 selector <= "00000" when (cpu0_mreq_n = '0' and cpu0_rd_n = '0' and cpu0_a_bus(15 downto 14) = "00" and loader_act = '1') else
 --			"00001" when (cpu0_mreq_n = '0' and cpu0_rd_n = '0' and cpu0_a_bus(15) = '1' and port_0001_reg(2) = '0') else
 			"00010" when (cpu0_mreq_n = '0' and cpu0_rd_n = '0') else 																				-- SDRAM
-			"00011" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_a_bus( 7 downto 0) = X"02") else 						-- M25P16
-			"00100" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_a_bus( 7 downto 0) = X"03") else 						-- M25P16
-			"00101" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_a_bus( 7 downto 5) = "100" and cpu0_a_bus(3 downto 0) = "1100") else 	-- RTC
+			"00011" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_a_bus( 7 downto 0) = X"02" and loader_act_reg = '1') else 						-- M25P16
+			"00100" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_a_bus( 7 downto 0) = X"03" and loader_act_reg = '1') else 						-- M25P16
+--			"00101" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_a_bus( 7 downto 5) = "100" and cpu0_a_bus(3 downto 0) = "1100") else 	-- RTC
 			"00110" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and port_bff7 = '1' and port_eff7_reg(7) = '1') else 				-- MC146818A
 			"00111" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_a_bus( 7 downto 0) = X"FE") else 						-- Клавиатура, порт xxFE
 			"01000" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_a_bus( 7 downto 6) = "01" and cpu0_a_bus(4 downto 0) = "10111") else 	-- Z-Controller
@@ -912,7 +911,7 @@ selector <= "00000" when (cpu0_mreq_n = '0' and cpu0_rd_n = '0' and cpu0_a_bus(1
 --			"10000" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_a_bus( 7 downto 0) = X"AC") else						-- UART
 --			"10001" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_a_bus( 7 downto 0) = X"BC") else
 --			"10010" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_a_bus( 7 downto 4) = "1011" and cpu0_a_bus(2 downto 0) = "011") else	-- General Sound
-			"10011" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_a_bus( 7 downto 0) = X"EB" and key_f(6) = '1') else			-- DivMMC
+--			"10011" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_a_bus( 7 downto 0) = X"EB" and key_f(6) = '1') else			-- DivMMC
 			"10100" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_a_bus(15 downto 0) = X"7FFD") else						-- чтение порта 7FFD
 			"10101" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_a_bus(15 downto 0) = X"DFFD") else						-- чтение порта DFFD
 			"10110" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_a_bus( 7 downto 0) = X"FF") else			-- порт атрибутов #FF

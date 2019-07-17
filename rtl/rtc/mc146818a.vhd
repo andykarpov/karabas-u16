@@ -3,6 +3,7 @@
 -------------------------------------------------------------------------------
 -- V0.1 	05.10.2011	первая версия
 -- V0.2
+-- V0.3  17.07.2019  версия с доступом к часам по I2C
 
 library IEEE;
 use IEEE.std_logic_1164.all;
@@ -18,7 +19,12 @@ port (
 	WR		: in std_logic;
 	A		: in std_logic_vector(5 downto 0);
 	DI		: in std_logic_vector(7 downto 0);
-	DO		: out std_logic_vector(7 downto 0));
+	DO		: out std_logic_vector(7 downto 0);
+	
+	BUSY 	: out std_logic := '1';
+	I2C_SDA : inout std_logic := '1';
+	I2C_SCL : inout std_logic := '1'
+);
 end;
 
 architecture RTL of MC146818A is
@@ -89,7 +95,77 @@ architecture RTL of MC146818A is
 	signal reg3e				: std_logic_vector(7 downto 0);
 	signal reg3f				: std_logic_vector(7 downto 0);	
 
+	signal is_busy 			: std_logic := '1';
+	signal is_filling 		: std_logic := '1';
+	
+	signal read_fifo_rd 			: std_logic := '0';
+	signal read_fifo_wr				: std_logic := '0';
+	signal read_fifo_di_bus 		: std_logic_vector(15 downto 0);
+	signal read_fifo_do_bus 		: std_logic_vector(15 downto 0);
+	signal read_fifo_empty			: std_logic := '1';
+	signal read_fifo_full 			: std_logic := '0';
+	signal read_fifo_cnt 			: std_logic_vector(1 downto 0) := "00";
+
+	signal write_fifo_rd 			: std_logic := '0';
+	signal write_fifo_wr				: std_logic := '0';
+	signal write_fifo_di_bus 		: std_logic_vector(15 downto 0);
+	signal write_fifo_do_bus 		: std_logic_vector(15 downto 0);
+	signal write_fifo_empty			: std_logic := '1';
+	signal write_fifo_full 			: std_logic := '0';
+	
+	signal i2c_is_address	: std_logic := '0';
+	signal i2c_di_bus			: std_logic_vector(7 downto 0);
+	signal i2c_do_bus			: std_logic_vector(7 downto 0);
+	signal i2c_wr 				: std_logic := '0';
+	signal i2c_address 		: std_logic_vector(7 downto 0);
+	signal i2c_data			: std_logic_vector(7 downto 0);
+
 begin
+
+	-- read fifo
+   U1: entity work.fifo_ram
+	PORT MAP (
+		rdclk => CLK,
+		rdreq => read_fifo_rd,
+		q => read_fifo_do_bus,
+		
+		wrclk => CLK,
+		wrreq => read_fifo_wr,
+		data => read_fifo_di_bus,
+		
+		rdempty => read_fifo_empty,
+		wrfull => read_fifo_full		
+	);
+	
+	-- write fifo
+	U2: entity work.fifo_ram 
+	PORT MAP (
+		rdclk => CLK,
+		rdreq => write_fifo_rd,
+		q => write_fifo_do_bus,
+		
+		wrclk => CLK,
+		wrreq => write_fifo_wr,
+		data => write_fifo_di_bus,
+		
+		rdempty => write_fifo_empty,
+		wrfull => write_fifo_full
+	);
+	
+	-- i2c unit
+	U3: entity work.i2c
+	port map (
+		RESET		=> RESET,
+		CLK		=> CLK,
+		ENA		=> ENA,
+		A		=> i2c_is_address,
+		DI		=> i2c_di_bus,
+		DO		=> i2c_do_bus,
+		WR		=> i2c_wr,
+		I2C_SCL		=> I2C_SCL,
+		I2C_SDA		=> I2C_SDA
+	);
+
 	process(A, seconds_reg, seconds_alarm_reg, minutes_reg, minutes_alarm_reg, hours_reg, hours_alarm_reg, weeks_reg, days_reg, month_reg, year_reg,
 			a_reg, b_reg, c_reg, e_reg, f_reg, reg10, reg11, reg12, reg13, reg14, reg15, reg16, reg17, reg18, reg19, reg1a, reg1b, reg1c, reg1d,
 			reg1e, reg1f, reg20, reg21, reg22, reg23, reg24, reg25, reg26, reg27, reg28, reg29, reg2a, reg2b, reg2c, reg2d, reg2e, reg2f, reg30,
@@ -171,20 +247,30 @@ begin
 			a_reg <= "00100110";
 			b_reg <= (others => '0');
 			c_reg <= (others => '0');
+			is_filling <= '1';
+			is_busy <= '1';
+			read_fifo_cnt <= "00";
+			read_fifo_rd <= '0';
+			write_fifo_wr <= '0';
 		elsif CLK'event and CLK = '1' then
+		
+			write_fifo_wr <= '0';
+			write_fifo_di_bus <= (others => '1');
+
 			-- RTC register write
 			if WR = '1' and CS = '1' then
+				write_fifo_wr <= '1';
 				case A(5 downto 0) is
-					when "000000" => seconds_reg <= DI;
-					when "000001" => seconds_alarm_reg <= DI;
-					when "000010" => minutes_reg <= DI;
-					when "000011" => minutes_alarm_reg <= DI;
-					when "000100" => hours_reg <= DI;
-					when "000101" => hours_alarm_reg <= DI;
-					when "000110" => weeks_reg <= DI;
-					when "000111" => days_reg <= DI;
-					when "001000" => month_reg <= DI;
-					when "001001" => year_reg <= DI;
+					when "000000" => seconds_reg <= DI; write_fifo_di_bus <= X"00" & seconds_reg;
+					when "000001" => seconds_alarm_reg <= DI; write_fifo_wr <= '0';
+					when "000010" => minutes_reg <= DI; write_fifo_di_bus <= X"01" & minutes_reg;
+					when "000011" => minutes_alarm_reg <= DI; write_fifo_wr <= '0';
+					when "000100" => hours_reg <= DI; write_fifo_di_bus <= X"02" & hours_reg;
+					when "000101" => hours_alarm_reg <= DI; write_fifo_wr <= '0';
+					when "000110" => weeks_reg <= DI; write_fifo_di_bus <= X"03" & weeks_reg;
+					when "000111" => days_reg <= DI; write_fifo_di_bus <= X"04" & days_reg;
+					when "001000" => month_reg <= DI; write_fifo_di_bus <= X"05" & month_reg;
+					when "001001" => year_reg <= DI; write_fifo_di_bus <= X"06" & year_reg;
 						if b_reg(2) = '0' then -- BCD to BIN convertion
 							if DI(4) = '0' then
 								leap_reg <= DI(1 downto 0);
@@ -194,62 +280,86 @@ begin
 						else 
 							leap_reg <= DI(1 downto 0);
 						end if;
-					when "001010" => a_reg <= DI;
-					when "001011" => b_reg <= DI;
---					when "001100" => c_reg <= DI;
---					when "001101" => d_reg <= DI;
-					when "001110" => e_reg <= DI;
-					when "001111" => f_reg <= DI;
-					when "010000" => reg10 <= DI;
-					when "010001" => reg11 <= DI;
-					when "010010" => reg12 <= DI;
-					when "010011" => reg13 <= DI;
-					when "010100" => reg14 <= DI;
-					when "010101" => reg15 <= DI;
-					when "010110" => reg16 <= DI;
-					when "010111" => reg17 <= DI;
-					when "011000" => reg18 <= DI;
-					when "011001" => reg19 <= DI;
-					when "011010" => reg1a <= DI;
-					when "011011" => reg1b <= DI;
-					when "011100" => reg1c <= DI;
-					when "011101" => reg1d <= DI;
-					when "011110" => reg1e <= DI;
-					when "011111" => reg1f <= DI;
-					when "100000" => reg20 <= DI;
-					when "100001" => reg21 <= DI;
-					when "100010" => reg22 <= DI;
-					when "100011" => reg23 <= DI;
-					when "100100" => reg24 <= DI;
-					when "100101" => reg25 <= DI;
-					when "100110" => reg26 <= DI;
-					when "100111" => reg27 <= DI;
-					when "101000" => reg28 <= DI;
-					when "101001" => reg29 <= DI;
-					when "101010" => reg2a <= DI;
-					when "101011" => reg2b <= DI;
-					when "101100" => reg2c <= DI;
-					when "101101" => reg2d <= DI;
-					when "101110" => reg2e <= DI;
-					when "101111" => reg2f <= DI;
-					when "110000" => reg30 <= DI;
-					when "110001" => reg31 <= DI;
-					when "110010" => reg32 <= DI;
-					when "110011" => reg33 <= DI;
-					when "110100" => reg34 <= DI;
-					when "110101" => reg35 <= DI;
-					when "110110" => reg36 <= DI;
-					when "110111" => reg37 <= DI;
-					when "111000" => reg38 <= DI;
-					when "111001" => reg39 <= DI;
-					when "111010" => reg3a <= DI;
-					when "111011" => reg3b <= DI;
-					when "111100" => reg3c <= DI;
-					when "111101" => reg3d <= DI;
-					when "111110" => reg3e <= DI;
-					when "111111" => reg3f <= DI;
-					when others => null;
+					when "001010" => a_reg <= DI; write_fifo_di_bus <= "00" & A & a_reg;
+					when "001011" => b_reg <= DI; write_fifo_di_bus <= "00" & A & b_reg;
+					--when "001100" => c_reg <= DI;
+					--when "001101" => d_reg <= DI;
+					when "001110" => e_reg <= DI; write_fifo_di_bus <= "00" & A & e_reg;
+					when "001111" => f_reg <= DI; write_fifo_di_bus <= "00" & A & f_reg;
+					when "010000" => reg10 <= DI; write_fifo_di_bus <= "00" & A & reg10;
+					when "010001" => reg11 <= DI; write_fifo_di_bus <= "00" & A & reg11;
+					when "010010" => reg12 <= DI; write_fifo_di_bus <= "00" & A & reg12;
+					when "010011" => reg13 <= DI; write_fifo_di_bus <= "00" & A & reg13;
+					when "010100" => reg14 <= DI; write_fifo_di_bus <= "00" & A & reg14;
+					when "010101" => reg15 <= DI; write_fifo_di_bus <= "00" & A & reg15;
+					when "010110" => reg16 <= DI; write_fifo_di_bus <= "00" & A & reg16;
+					when "010111" => reg17 <= DI; write_fifo_di_bus <= "00" & A & reg17;
+					when "011000" => reg18 <= DI; write_fifo_di_bus <= "00" & A & reg18;
+					when "011001" => reg19 <= DI; write_fifo_di_bus <= "00" & A & reg19;
+					when "011010" => reg1a <= DI; write_fifo_di_bus <= "00" & A & reg1a;
+					when "011011" => reg1b <= DI; write_fifo_di_bus <= "00" & A & reg1b;
+					when "011100" => reg1c <= DI; write_fifo_di_bus <= "00" & A & reg1c;
+					when "011101" => reg1d <= DI; write_fifo_di_bus <= "00" & A & reg1d;
+					when "011110" => reg1e <= DI; write_fifo_di_bus <= "00" & A & reg1e;
+					when "011111" => reg1f <= DI; write_fifo_di_bus <= "00" & A & reg1f;
+					when "100000" => reg20 <= DI; write_fifo_di_bus <= "00" & A & reg20;
+					when "100001" => reg21 <= DI; write_fifo_di_bus <= "00" & A & reg21;
+					when "100010" => reg22 <= DI; write_fifo_di_bus <= "00" & A & reg22;
+					when "100011" => reg23 <= DI; write_fifo_di_bus <= "00" & A & reg23;
+					when "100100" => reg24 <= DI; write_fifo_di_bus <= "00" & A & reg24;
+					when "100101" => reg25 <= DI; write_fifo_di_bus <= "00" & A & reg25;
+					when "100110" => reg26 <= DI; write_fifo_di_bus <= "00" & A & reg26;
+					when "100111" => reg27 <= DI; write_fifo_di_bus <= "00" & A & reg27;
+					when "101000" => reg28 <= DI; write_fifo_di_bus <= "00" & A & reg28;
+					when "101001" => reg29 <= DI; write_fifo_di_bus <= "00" & A & reg29;
+					when "101010" => reg2a <= DI; write_fifo_di_bus <= "00" & A & reg2a;
+					when "101011" => reg2b <= DI; write_fifo_di_bus <= "00" & A & reg2b;
+					when "101100" => reg2c <= DI; write_fifo_di_bus <= "00" & A & reg2c;
+					when "101101" => reg2d <= DI; write_fifo_di_bus <= "00" & A & reg2d;
+					when "101110" => reg2e <= DI; write_fifo_di_bus <= "00" & A & reg2e;
+					when "101111" => reg2f <= DI; write_fifo_di_bus <= "00" & A & reg2f;
+					when "110000" => reg30 <= DI; write_fifo_di_bus <= "00" & A & reg30;
+					when "110001" => reg31 <= DI; write_fifo_di_bus <= "00" & A & reg31;
+					when "110010" => reg32 <= DI; write_fifo_di_bus <= "00" & A & reg32;
+					when "110011" => reg33 <= DI; write_fifo_di_bus <= "00" & A & reg33;
+					when "110100" => reg34 <= DI; write_fifo_di_bus <= "00" & A & reg34;
+					when "110101" => reg35 <= DI; write_fifo_di_bus <= "00" & A & reg35;
+					when "110110" => reg36 <= DI; write_fifo_di_bus <= "00" & A & reg36;
+					when "110111" => reg37 <= DI; write_fifo_di_bus <= "00" & A & reg37;
+					when "111000" => reg38 <= DI; write_fifo_di_bus <= "00" & A & reg38;
+					when "111001" => reg39 <= DI; write_fifo_di_bus <= "00" & A & reg39;
+					when "111010" => reg3a <= DI; write_fifo_di_bus <= "00" & A & reg3a;
+					when "111011" => reg3b <= DI; write_fifo_di_bus <= "00" & A & reg3b;
+					when "111100" => reg3c <= DI; write_fifo_di_bus <= "00" & A & reg3c;
+					when "111101" => reg3d <= DI; write_fifo_di_bus <= "00" & A & reg3d;
+					when "111110" => reg3e <= DI; write_fifo_di_bus <= "00" & A & reg3e;
+					when "111111" => reg3f <= DI; write_fifo_di_bus <= "00" & A & reg3f;
+					when others => write_fifo_wr <= '0';
 				end case;
+			else 
+				-- fill read_fifo into registers
+--				case read_fifo_cnt is 
+--					when "00" => 
+--						read_fifo_rd <= not(read_fifo_empty); 
+--						if read_fifo_empty = '0' then 
+--							read_fifo_cnt <= "01"; 
+--						end if; 
+--					when "01" => 
+--						read_fifo_rd <= '0'; 
+--						i2c_address <= read_fifo_do_bus(15 downto 8);
+--						i2c_data <= read_fifo_do_bus(7 downto 0);
+--						case i2c_address is
+--							when X"00" => seconds_reg <= i2c_data;
+--							when X"01" => minutes_reg <= i2c_data;
+--							when X"02" => hours_reg <= i2c_data;
+--							-- todo
+--							when others => null;
+--						end case;
+--						read_fifo_cnt <= "10";
+--					when "10" => read_fifo_cnt <= "11";
+--					when "11" => read_fifo_cnt <= "00";
+--				end case;
+				
 			end if;
 			if b_reg(7) = '0' and ENA = '1' then
 				if pre_scaler /= X"000000" then
@@ -400,4 +510,27 @@ begin
 			end if;
 		end if;
 	end process;
+	
+	-- filling (reading from i2c to read fifo)
+	process(CLK, ENA, RESET, is_filling)
+	begin 
+		if CLK'event and CLK='1' then 
+			-- TODO: counter to read each address from I2C
+		end if;
+	end process;
+	
+	-- write fifo processing
+	process(CLK, ENA, RESET)
+	begin 
+		if CLK'event and CLK='1' then 
+			if write_fifo_empty = '0' and is_filling = '0' then 
+				-- TODO: pop byte from write to i2c each	
+			end if;
+			if ENA='1' then 
+			end if;
+		end if;
+	end process;
+	
+	BUSY <= is_busy;
+	
 end rtl;

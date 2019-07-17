@@ -33,7 +33,7 @@ startprog:
 	xor a		;bit2 = (0:Loader ON, 1:Loader OFF); bit1 = (NC); bit0 = (0:M25P16, 1:ENC424J600)
 	ld bc,system_port
 	out (c),a
-	
+
 
 ; 0B0000 GS 	32K
 ; 0B8000 GLUK	16K	0
@@ -55,7 +55,7 @@ startprog:
 	call spi_w
 	ld d,#00
 	call spi_w
-		
+
 	ld hl,#8000	; gs rom 32k
 spi_loader1
 	call spi_r
@@ -64,7 +64,7 @@ spi_loader1
 	ld a,l
 	or h
 	jr nz,spi_loader1
-	
+
 	ld bc,mask_port
 	ld a,%11111111	; маска порта по and
 	out (c),a
@@ -107,131 +107,6 @@ spi_loader2
 	ld hl,str3	;завершено
 	call print_str
 
-	ld hl,str4	;инициализация MC14818A
-	call print_str
-
-; -----------------------------------------------------------------------------
-; I2C DS1338 to MC14818 loader
-; -----------------------------------------------------------------------------
-rtc_init
-	ld bc,#3f00
-	ld hl,#8000
-	call i2c_get
-
-	ld a,#80
-	ld bc,#eff7
-	out(c),a
-
-; register b
-	ld a,#0b
-	ld b,#df
-	out (c),a
-	ld a,#82
-	ld b,#bf
-	out (c),a
-; seconds
-	ld a,#00
-	ld b,#df
-	out (c),a
-	ld a,(#8000)	;00h seconds
-	and %01111111	;удаляем ch бит
-	ld b,#bf
-	out (c),a
-; minutes		
-	ld a,#02
-	ld b,#df
-	out (c),a
-	ld a,(#8001)	;01h minutes
-	ld b,#bf
-	out (c),a
-; hours		
-	ld a,#04
-	ld b,#df
-	out (c),a
-	ld a,(#8002)	;02h hours
-	and #1f
-	ld b,#bf
-	out (c),a
-; day of the week		
-	ld a,#06
-	ld b,#df
-	out (c),a
-	ld a,(#8003)	;03h day
-	ld b,#bf
-	out (c),a
-; date of the month
-	ld a,#07
-	ld b,#df
-	out (c),a
-	ld a,(#8004)	;04h date
-	ld b,#bf
-	out (c),a
-; month
-	ld a,#08
-	ld b,#df
-	out (c),a
-	ld a,(#8005)	;05h month
-	ld b,#bf
-	out (c),a
-; year
-	ld a,#09
-	ld b,#df
-	out (c),a
-	ld a,(#8005)
-	; and #c0
-	; rlca
-	; rlca
-	; ld hl,#8010	; ячейка для хранения года (8 бит)
-	; add a,(hl)	; год из pcf + поправка из ячейки
-	ld b,#bf
-	out (c),a
-; register b
-	ld a,#0b
-	ld b,#df
-	out (c),a
-	ld a,#02
-	ld b,#bf
-	out (c),a
-
-	ld a,#00
-	ld bc,#eff7
-	out(c),a
-
-	ld hl,str3	;завершено
-	call print_str
-
-	;вывод времени
-	ld a,(#8002)	;час
-	and #1f
-	call print_hex
-	ld a,":"
-	call print_char
-	ld a,(#8001)	;минуты
-	call print_hex
-	ld a,":"
-	call print_char
-	ld a,(#8000)	;секунды
-	and #7F
-	call print_hex
-
-	;вывод даты
-	ld a," "
-	call print_char
-	ld a,(#8004)	;число
-	call print_hex
-	ld a,"."
-	call print_char
-	ld a,(#8005)	;месец
-	call print_hex
-	ld a,"."
-	call print_char
-	ld a,(#8006)	;год
-	call print_hex
-
-;	ld hl,str0	;any key
-;	call print_str
-;	call anykey
-
 	ld a,%00000100	; bit2 = (0:Loader ON, 1:Loader OFF); bit1 = (NC); bit0 = (0:M25P16, 1:ENC424J600)
 	ld bc,system_port
 	out (c),a
@@ -239,81 +114,7 @@ rtc_init
 	ld sp,#ffff
 	jp #0000	; запуск системы
 
-
-
-
-
-
-
-
-
-
-
-
-
-; -----------------------------------------------------------------------------	
-; I2C 
 ; -----------------------------------------------------------------------------
-; Ports:
-; #8C: Data (write/read)
-;	bit 7-0	= Stores I2C read/write data
-; #8C: Address (write)
-; 	bit 7-1	= Holds the first seven address bits of the I2C slave device
-; 	bit 0	= I2C 1:read/0:write bit
-
-; #9C: Command/Status Register (write)
-;	bit 7-2	= Reserved
-;	bit 1-0	= 00: IDLE; 01: START; 10: nSTART; 11: STOP
-; #9C: Command/Status Register (read)
-;	bit 7-2	= Reserved
-;	bit 1 	= 1:ERROR 	(I2C transaction error)
-;	bit 0 	= 1:BUSY 	(I2C bus busy)
-
-; HL= адрес буфера
-; B = длина (0=256 байт)
-; C = адрес
-i2c_get	
-	ld a,%11111101	; start
-	out (#9c),a
-	ld a,%11010000	; slave address w
-	out (#8c),a
-	call i2c_ack
-	ld a,%11111110	; nstart
-	out (#9c),a
-	ld a,c		; word address
-	out (#8c),a
-	call i2c_ack
-	ld a,%11111101	; start
-	out (#9c),a
-	ld a,%11010001	; slave address r
-	out (#8c),a
-	call i2c_ack
-	ld a,%11111100	; idle
-	out (#9c),a
-i2c_get2
-	out (#8c),a
-	call i2c_ack
-	in a,(#8c)
-	ld (hl),a
-	inc hl
-	ld a,b
-	cp 2
-	jr nz,i2c_get1
-	ld a,%11111111	; stop
-	out (#9c),a
-i2c_get1
-	djnz i2c_get2
-	ret
-
-; wait ack
-i2c_ack
-	in a,(#9c)
-	rrca		; ack?
-	jr c,i2c_ack
-	rrca		; error?
-	ret
-
-; -----------------------------------------------------------------------------	
 ; SPI -- V0.2.1	(20130901)
 ; -----------------------------------------------------------------------------
 ; Ports:
@@ -344,16 +145,16 @@ spi_w
 spi_r
 	ld d,#ff
 	call spi_w
-spi_r1	
+spi_r1
 	in a,(#03)
 	rlca
 	jr c,spi_r1
 	in a,(#02)
 	ret
-	
+
 ;==============================================================================
-; CMOS Setup Utility	
-	
+; CMOS Setup Utility
+
 
 ;clear screen
 cls
@@ -577,7 +378,7 @@ dectb_w
 ;	pop bc
 ;	djnz main
 ;	ret
-scroll	
+scroll
 	push hl
 	push de
 	ld a,d
@@ -604,7 +405,7 @@ scroll
 loop1
 	inc h
 	inc d
-loop2	
+loop2
 	dup 31
 	ldi
 	edup
@@ -638,7 +439,7 @@ ll6934
 	sub #08
 	ld d,a
 	ret
-ll693e	
+ll693e
 	inc h
 	ld a,l
 	sub #e0
@@ -648,7 +449,7 @@ ll693e
 	sub #08
 	ld h,a
 	ret
-ll6949 	
+ll6949
 	inc d
 	ld a,e
 	sub #e0
@@ -658,7 +459,7 @@ ll6949
 	sub #08
 	ld d,a
 	ret
-	
+
 ;Ожидание клавиши
 anykey
 	xor a			;все биты сброшены
@@ -667,8 +468,8 @@ anykey
 	and 31 			;AND 31:CP 31,  но короче
 	jr z,anykey 		;пока не нажмут ANY KEY
 	ret
-	
-	
+
+
 ;управляющие коды
 ;13 (0x0d)		- след строка
 ;17 (0x11),color	- изменить цвет последующих символов
@@ -676,22 +477,18 @@ anykey
 ;24 (0x18),x		- изменить позицию по x
 ;25 (0x19),y		- изменить позицию по y
 ;0			- конец строки
-	
-	
-str1	
+
+
+str1
 ;          "                                "
 	db 23,0,0,17,47,"ReVerSE-U16 By MVV",13,13,13
 	db 17,7,"FPGA Core - Karabas-4096",13
-	db "(build 20190717)",13,13
+	db "(build 20190718)",13,13
 	db "Copying data from FLASH...",0
 str3
 	db 17,4," done",17,7,13,0
-str4
-	db 13,"Initialization MC146818...",0
-;str0
-;	db 13,13,23,0,23,17,7,"Press ENTER to Resume",0
 
-font	
+font
 	INCBIN "font.bin"
 
 	savebin "loader.bin",startprog, 8192
