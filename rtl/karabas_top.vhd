@@ -132,7 +132,6 @@ signal cpu0_clk		: std_logic;
 signal cpu0_a_bus	: std_logic_vector(15 downto 0);
 signal cpu0_do_bus	: std_logic_vector(7 downto 0);
 signal cpu0_di_bus	: std_logic_vector(7 downto 0);
-signal cpu0_d_bus	: std_logic_vector(7 downto 0);
 signal cpu0_mreq_n	: std_logic;
 signal cpu0_iorq_n	: std_logic;
 signal cpu0_wr_n	: std_logic;
@@ -279,29 +278,6 @@ signal host_vga_hs : std_logic;
 signal host_vga_vs : std_logic;
 signal host_vga_sblank : std_logic;
 
--- A-Z80 CPU
-component z80_top_direct_n
-port (
-	nRESET	: in std_logic;
-	CLK		: in std_logic;
-	nWAIT		: in std_logic;
-	nINT		: in std_logic;
-	nNMI		: in std_logic;
-	nBUSRQ	: in std_logic;
-	nM1		: out std_logic;
-	nMREQ		: out std_logic;
-	nIORQ		: out std_logic;
-	nRD		: out std_logic;
-	nWR		: out std_logic;
-	nRFSH		: out std_logic;
-	nHALT		: out std_logic;
-	nBUSACK	: out std_logic;
-	A		   : out std_logic_vector(15 downto 0);
-	D		   : inout std_logic_vector(7 downto 0)
-);
-end component;
-
-
 begin
 
 -- PLL
@@ -316,8 +292,35 @@ port map (
 	c3					=> clk_sdr,		--  84.0 MHz
 	c4					=> clk_hdmi);	-- 140.0 MHz
 	
+-- Zilog Z80A CPU
+U1: entity work.T80se
+generic map (
+	Mode		=> 0,	-- 0 => Z80, 1 => Fast Z80, 2 => 8080, 3 => GB
+	T2Write		=> 1,	-- 0 => WR_n active in T3, /=0 => WR_n active in T2
+	IOWait		=> 1 )	-- 0 => Single cycle I/O, 1 => Std I/O cycle
+
+port map (
+	RESET_n		=> cpu0_reset_n,
+	CLK_n		=> clk_bus,
+	ENA		=> cpuclk,
+	WAIT_n		=> '1',--cpu_wait_n,
+	INT_n		=> cpu0_int_n,
+	NMI_n		=> cpu0_nmi_n,
+	BUSRQ_n		=> '1',
+	M1_n		=> cpu0_m1_n,
+	MREQ_n		=> cpu0_mreq_n,
+	IORQ_n		=> cpu0_iorq_n,
+	RD_n		=> cpu0_rd_n,
+	WR_n		=> cpu0_wr_n,
+	RFSH_n		=> cpu0_rfsh_n,
+	HALT_n		=> open,--cpu_halt_n,
+	BUSAK_n		=> open,--cpu_basak_n,
+	A		=> cpu0_a_bus,
+	DI		=> cpu0_di_bus,
+	DO		=> cpu0_do_bus);
+	
 -- Loader
-U1: entity work.loader
+U2: entity work.loader
 port map(
 	CLK 				=> clk_bus,
 	CLK14 			=> clk14,
@@ -348,29 +351,8 @@ port map(
 	
 	LOADER_ACTIVE 	=> loader_act,
 	LOADER_RESET 	=> loader_reset
-);
-
--- Zilog Z80A CPU
-U2: z80_top_direct_n
-port map(
-	nRESET			=> cpu0_reset_n,
-	CLK				=> cpuclk,
-	nWAIT				=> '1',
-	nINT				=> cpu0_int_n,
-	nNMI				=> cpu0_nmi_n,
-	nBUSRQ			=> '1',
-	nM1				=> cpu0_m1_n,
-	nMREQ				=> cpu0_mreq_n,
-	nIORQ				=> cpu0_iorq_n,
-	nRD				=> cpu0_rd_n,
-	nWR				=> cpu0_wr_n,
-	nRFSH				=> cpu0_rfsh_n,
-	nHALT				=> open,
-	nBUSACK			=> open,
-	A					=> cpu0_a_bus,
-	D					=> cpu0_d_bus
-);
-
+);	
+	
 -- Video Spectrum/Pentagon
 U3: entity work.video
 port map (
@@ -614,8 +596,6 @@ key_global_reset <= kb_f_bus(2);
 cpu0_reset_n <= not(reset) and not(kb_f_bus(4)) and not(loader_reset);					-- CPU reset
 cpu0_inta_n <= cpu0_iorq_n or cpu0_m1_n;	-- INTA
 cpu0_nmi_n <= not kb_f_bus(5);				-- NMI
-cpu0_d_bus <= cpu0_di_bus when selector /= "11111" else (others => 'Z');
-cpu0_do_bus <= cpu0_d_bus; -- when selector = "11111" else (others => '1');
 
 cpuclk <= clk_bus and cpu0_ena;
 cpu0_mult <= "00"; -- normal 3.5MHz mode, no turbo
@@ -635,7 +615,7 @@ end process;
 
 host_ram_a <= ram_a_bus & cpu0_a_bus(12 downto 0);
 host_ram_di <= cpu0_do_bus;
-host_ram_wr <= '1' when cpu0_mreq_n = '0' and cpu0_wr_n = '0' and (mux(3 downto 2) = "01" or mux(3 downto 1) = "001") else '0';
+host_ram_wr <= '1' when cpu0_mreq_n = '0' and cpu0_wr_n = '0' and (mux = "1000" or mux(3 downto 2) = "01" or mux(3 downto 1) = "001" or mux(3 downto 2) = "11" or mux(3 downto 1) = "101") else '0';
 host_ram_rd <= not (cpu0_mreq_n or cpu0_rd_n);
 host_ram_rfsh <= not cpu0_rfsh_n;
 
@@ -691,7 +671,12 @@ begin
 		if cpu0_iorq_n = '0' and cpu0_wr_n = '0' and cpu0_a_bus(7 downto 0) = X"FE" then port_xxfe_reg <= cpu0_do_bus; end if;
 		if cpu0_iorq_n = '0' and cpu0_wr_n = '0' and cpu0_a_bus = X"EFF7" then port_eff7_reg <= cpu0_do_bus; end if;
 		if cpu0_iorq_n = '0' and cpu0_wr_n = '0' and cpu0_a_bus = X"1FFD" then port_1ffd_reg <= cpu0_do_bus; end if;
-		if cpu0_iorq_n = '0' and cpu0_wr_n = '0' and cpu0_a_bus = X"7FFD" then port_7ffd_reg <= cpu0_do_bus; end if;
+		if cpu0_iorq_n = '0' and cpu0_wr_n = '0' and cpu0_a_bus = X"7FFD" and port_eff7_reg(2) = '0' then  -- pentagon 1024 / skayp 4096 ext mem lock
+			port_7ffd_reg <= cpu0_do_bus;
+		elsif cpu0_iorq_n = '0' and cpu0_wr_n = '0' and cpu0_a_bus = X"7FFD" and port_eff7_reg(2) = '1' and port_7ffd_reg(5) = '0' then 
+			port_7ffd_reg <= cpu0_do_bus;
+		end if;
+		--if cpu0_iorq_n = '0' and cpu0_wr_n = '0' and cpu0_a_bus = X"7FFD" then port_7ffd_reg <= cpu0_do_bus; end if; -- 7ffd - kay 1024 without mem lock
 		if cpu0_iorq_n = '0' and cpu0_wr_n = '0' and cpu0_a_bus = X"DFFD" then port_dffd_reg <= cpu0_do_bus; end if;
 		if cpu0_iorq_n = '0' and cpu0_wr_n = '0' and cpu0_a_bus = X"DFF7" and port_eff7_reg(7) = '1' then mc146818_a_bus <= cpu0_do_bus(5 downto 0); end if;
 		if cpu0_m1_n = '0' and cpu0_mreq_n = '0' and cpu0_a_bus(15 downto 8) = X"3D" and port_7ffd_reg(4) = '1' then dos_act <= '1';
@@ -700,31 +685,29 @@ begin
 end process;
 
 ------------------------------------------------------------------------------
--- RAM mux
+-- RAM mux / ext
 
-mux <= '0' & cpu0_a_bus(15 downto 13);
+-- mux <= port_eff7_reg(3) & cpu0_a_bus(15 downto 13); -- eff7(3): 0 - ROM in CPU0, 1 - RAM0 in CPU0 -- pentagon 1024
+mux <= port_1ffd_reg(0) & cpu0_a_bus(15 downto 13); -- 1ffd(7): 0 - ROM in CPU0, 1 - RAM0 in CPU0 -- kay 1024 / skayp 4096
 
--- #1FFD, bit 4 - 256Kb
--- #1FFD, bit 7 - 512Kb
--- #7FFD, bit 7 - 1024Kb
--- #7FFD, bit 6 - 2048Kb
--- #7FFD, bit 5 - 4096Kb.
--- ram_ext <= "000" & port_7ffd_reg(5) & port_7ffd_reg(6) & port_7ffd_reg(7) & port_1ffd_reg(7) & port_1ffd_reg(4);
-	ram_ext <= "000" & port_dffd_reg(4 downto 0);
+-- ram_ext <= "000" & port_dffd_reg(4 downto 0); -- profi 4096
+--	ram_ext <= "00000" & port_7ffd_reg(5) & port_7ffd_reg(7) & port_7ffd_reg(6) when port_eff7_reg(2) = '0' else "00000000"; -- pentagon 1024
+--	ram_ext <= "00000" & port_1ffd_reg(7) & port_7ffd_reg(7) & port_1ffd_reg(4); -- kay 1024
+	ram_ext <= "000" & port_1ffd_reg(7) & port_1ffd_reg(4) & port_7ffd_reg(5) & port_7ffd_reg(6) & port_7ffd_reg(7) when port_eff7_reg(2) = '0' else "00000000"; -- skayp 4096
 
 process (mux, port_7ffd_reg, port_dffd_reg, cpu0_a_bus, dos_act, port_1ffd_reg, ram_ext)
 begin
 	case mux is
+--		when "1000" => ram_a_bus <= "000000000000"; -- RAM0 in CPU0 instead of ROM -- pentagon 1024
+		when "1000" => ram_a_bus <= "000000000000"; -- RAM0 in CPU0 instead of ROM -- kay 1024
 		when "0000" => ram_a_bus <= "100001000" & (not(dos_act) and not(port_1ffd_reg(1))) & (port_7ffd_reg(4) and not(port_1ffd_reg(1))) & '0';	-- Seg0 ROM 0000-1FFF
-		when "0001" => ram_a_bus <= "100001000" & (not(dos_act) and not(port_1ffd_reg(1))) & (port_7ffd_reg(4) and not(port_1ffd_reg(1))) & '1';	-- Seg0 ROM 2000-3FFF
-		when "0010" => ram_a_bus <= "000000001010";	-- Seg1 RAM 4000-5FFF
-		when "0011" => ram_a_bus <= "000000001011";	-- Seg1 RAM 6000-7FFF
-		when "0100" => ram_a_bus <= "000000000100";	-- Seg2 RAM 8000-9FFF
-		when "0101" => ram_a_bus <= "000000000101";	-- Seg2 RAM A000-BFFF
-		--when "0110" => ram_a_bus <= (port_dffd_reg and "00011111") & port_7ffd_reg(2 downto 0) & '0';	-- Seg3 RAM C000-DFFF
-		--when "0111" => ram_a_bus <= (port_dffd_reg and "00011111") & port_7ffd_reg(2 downto 0) & '1';	-- Seg3 RAM E000-FFFF
-		when "0110" => ram_a_bus <= ram_ext & port_7ffd_reg(2 downto 0) & '0';	-- Seg3 RAM C000-DFFF
-		when "0111" => ram_a_bus <= ram_ext & port_7ffd_reg(2 downto 0) & '1';	-- Seg3 RAM E000-FFFF
+		when "0001"|"1001" => ram_a_bus <= "100001000" & (not(dos_act) and not(port_1ffd_reg(1))) & (port_7ffd_reg(4) and not(port_1ffd_reg(1))) & '1';	-- Seg0 ROM 2000-3FFF
+		when "0010"|"1010" => ram_a_bus <= "000000001010";	-- Seg1 RAM 4000-5FFF
+		when "0011"|"1011" => ram_a_bus <= "000000001011";	-- Seg1 RAM 6000-7FFF
+		when "0100"|"1100" => ram_a_bus <= "000000000100";	-- Seg2 RAM 8000-9FFF
+		when "0101"|"1101" => ram_a_bus <= "000000000101";	-- Seg2 RAM A000-BFFF
+		when "0110"|"1110" => ram_a_bus <= ram_ext & port_7ffd_reg(2 downto 0) & '0';	-- Seg3 RAM C000-DFFF
+		when "0111"|"1111" => ram_a_bus <= ram_ext & port_7ffd_reg(2 downto 0) & '1';	-- Seg3 RAM E000-FFFF
 		when others => null;
 	end case;
 end process;

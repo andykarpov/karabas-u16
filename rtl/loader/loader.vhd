@@ -56,7 +56,6 @@ signal cpu0_clk		: std_logic;
 signal cpu0_a_bus	: std_logic_vector(15 downto 0);
 signal cpu0_do_bus	: std_logic_vector(7 downto 0);
 signal cpu0_di_bus	: std_logic_vector(7 downto 0);
-signal cpu0_d_bus	: std_logic_vector(7 downto 0);
 signal cpu0_mreq_n	: std_logic;
 signal cpu0_iorq_n	: std_logic;
 signal cpu0_wr_n	: std_logic;
@@ -123,71 +122,34 @@ signal mux		: std_logic_vector(3 downto 0);
 
 signal reset_cnt  : std_logic_vector(3 downto 0) := "0000";
 
---signal cpu0_m1 : std_logic;
---signal cpu0_mreq : std_logic;
---signal cpu0_iorq : std_logic;
---signal cpu0_wr : std_logic;
-
--- A-Z80 CPU
-component z80_top_direct_n
-port (
-	nRESET	: in std_logic;
-	CLK		: in std_logic;
-	nWAIT		: in std_logic;
-	nINT		: in std_logic;
-	nNMI		: in std_logic;
-	nBUSRQ	: in std_logic;
-	nM1		: out std_logic;
-	nMREQ		: out std_logic;
-	nIORQ		: out std_logic;
-	nRD		: out std_logic;
-	nWR		: out std_logic;
-	nRFSH		: out std_logic;
-	nHALT		: out std_logic;
-	nBUSACK	: out std_logic;
-	A		   : out std_logic_vector(15 downto 0);
-	D		   : inout std_logic_vector(7 downto 0)
-);
-end component;
-
-
 begin
 	
---U1: entity work.nz80cpu
---port map (
---	I_WAIT		=> cpuclk,
---	I_RESET		=> RESET,
---	I_CLK		=> CLK,
---	I_NMI		=> not(cpu0_nmi_n),
---	I_INT		=> not(cpu0_int_n),
---	I_DATA		=> cpu0_di_bus,
---	O_DATA		=> cpu0_do_bus,
---	O_ADDR		=> cpu0_a_bus,
---	O_M1		=> cpu0_m1,
---	O_MREQ		=> cpu0_mreq,
---	O_IORQ		=> cpu0_iorq,
---	O_WR		=> cpu0_wr,
---	O_HALT		=> open );	
+-- Zilog Z80A CPU
+U1: entity work.T80se
+generic map (
+	Mode		=> 0,	-- 0 => Z80, 1 => Fast Z80, 2 => 8080, 3 => GB
+	T2Write		=> 1,	-- 0 => WR_n active in T3, /=0 => WR_n active in T2
+	IOWait		=> 1 )	-- 0 => Single cycle I/O, 1 => Std I/O cycle
 
-U1: z80_top_direct_n
-port map(
-	nRESET			=> cpu0_reset_n,
-	CLK				=> cpuclk,
-	nWAIT				=> '1',
-	nINT				=> cpu0_int_n,
-	nNMI				=> cpu0_nmi_n,
-	nBUSRQ			=> '1',
-	nM1				=> cpu0_m1_n,
-	nMREQ				=> cpu0_mreq_n,
-	nIORQ				=> cpu0_iorq_n,
-	nRD				=> cpu0_rd_n,
-	nWR				=> cpu0_wr_n,
-	nRFSH				=> cpu0_rfsh_n,
-	nHALT				=> open,
-	nBUSACK			=> open,
-	A					=> cpu0_a_bus,
-	D					=> cpu0_d_bus
-);
+port map (
+	RESET_n		=> not RESET,
+	CLK_n		=> CLK,
+	ENA		=> cpuclk,
+	WAIT_n		=> '1',--cpu_wait_n,
+	INT_n		=> cpu0_int_n,
+	NMI_n		=> cpu0_nmi_n,
+	BUSRQ_n		=> '1',
+	M1_n		=> cpu0_m1_n,
+	MREQ_n		=> cpu0_mreq_n,
+	IORQ_n		=> cpu0_iorq_n,
+	RD_n		=> cpu0_rd_n,
+	WR_n		=> cpu0_wr_n,
+	RFSH_n		=> cpu0_rfsh_n,
+	HALT_n		=> open,--cpu_halt_n,
+	BUSAK_n		=> open,--cpu_basak_n,
+	A		=> cpu0_a_bus,
+	DI		=> cpu0_di_bus,
+	DO		=> cpu0_do_bus);
 	
 -- Video Spectrum/Pentagon
 U2: entity work.loader_video
@@ -265,16 +227,6 @@ cpu0_inta_n <= cpu0_iorq_n or cpu0_m1_n;		-- INTA
 cpu0_nmi_n <= '1';				-- NMI
 cpu0_ena <= ENA3_5;
 cpuclk <= CLK and cpu0_ena;
-
-cpu0_d_bus <= cpu0_di_bus when selector /= "11111" else (others => 'Z');
-cpu0_do_bus <= cpu0_d_bus; -- when selector = "11111" else (others => '1');
-
---cpu0_m1_n <= not cpu0_m1;
---cpu0_mreq_n <= not cpu0_mreq;
---cpu0_iorq_n <= not cpu0_iorq;
---cpu0_wr_n <= not cpu0_wr;
---cpu0_rd_n <= not cpu0_wr_n;
---cpu0_rfsh_n <= '1';
 
 -------------------------------------------------------------------------------
 -- RAM

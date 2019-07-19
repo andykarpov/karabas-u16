@@ -157,7 +157,13 @@ set_global_assignment -name MIN_CORE_JUNCTION_TEMP 0
 set_global_assignment -name MAX_CORE_JUNCTION_TEMP 85
 
 
-set_global_assignment -name VHDL_FILE ../rtl/loader/nz80cpu.vhd
+
+set_global_assignment -name VHDL_FILE ../rtl/t80se/T80_Reg.vhd
+set_global_assignment -name VHDL_FILE ../rtl/t80se/T80_Pack.vhd
+set_global_assignment -name VHDL_FILE ../rtl/t80se/T80_MCode.vhd
+set_global_assignment -name VHDL_FILE ../rtl/t80se/T80_ALU.vhd
+set_global_assignment -name VHDL_FILE ../rtl/t80se/T80.vhd
+set_global_assignment -name VHDL_FILE ../rtl/t80se/T80se.vhd
 set_global_assignment -name VHDL_FILE ../rtl/loader/loader_video.vhd
 set_global_assignment -name VHDL_FILE ../rtl/loader/loader_spi.vhd
 set_global_assignment -name VHDL_FILE ../rtl/loader/loader_scan_convert.vhd
@@ -198,46 +204,6 @@ set_global_assignment -name VHDL_FILE ../rtl/hdmi/altddio_out1.vhd
 set_global_assignment -name QIP_FILE ../rtl/hdmi/altddio_out1.qip
 set_global_assignment -name VHDL_FILE ../rtl/divmmc/divmmc.vhd
 set_global_assignment -name VHDL_FILE ../rtl/dac/dac.vhd
-set_global_assignment -name VERILOG_FILE ../rtl/cpu/bus/bus_switch.v
-set_global_assignment -name VERILOG_FILE ../rtl/cpu/control/execute.v
-set_global_assignment -name VERILOG_FILE ../rtl/cpu/control/pla_decode.v
-set_global_assignment -name VERILOG_FILE ../rtl/cpu/toplevel/z80_top_direct_n.v
-set_global_assignment -name VERILOG_FILE ../rtl/cpu/alu/alu.v
-set_global_assignment -name VERILOG_FILE ../rtl/cpu/alu/alu_bit_select.v
-set_global_assignment -name VERILOG_FILE ../rtl/cpu/alu/alu_control.v
-set_global_assignment -name VERILOG_FILE ../rtl/cpu/alu/alu_core.v
-set_global_assignment -name VERILOG_FILE ../rtl/cpu/alu/alu_flags.v
-set_global_assignment -name VERILOG_FILE ../rtl/cpu/alu/alu_mux_2.v
-set_global_assignment -name VERILOG_FILE ../rtl/cpu/alu/alu_mux_2z.v
-set_global_assignment -name VERILOG_FILE ../rtl/cpu/alu/alu_mux_3z.v
-set_global_assignment -name VERILOG_FILE ../rtl/cpu/alu/alu_mux_4.v
-set_global_assignment -name VERILOG_FILE ../rtl/cpu/alu/alu_mux_8.v
-set_global_assignment -name VERILOG_FILE ../rtl/cpu/alu/alu_prep_daa.v
-set_global_assignment -name VERILOG_FILE ../rtl/cpu/alu/alu_select.v
-set_global_assignment -name VERILOG_FILE ../rtl/cpu/alu/alu_shifter_core.v
-set_global_assignment -name VERILOG_FILE ../rtl/cpu/alu/alu_slice.v
-set_global_assignment -name VERILOG_FILE ../rtl/cpu/bus/address_latch.v
-set_global_assignment -name VERILOG_FILE ../rtl/cpu/bus/address_mux.v
-set_global_assignment -name VERILOG_FILE ../rtl/cpu/bus/address_pins.v
-set_global_assignment -name VERILOG_FILE ../rtl/cpu/bus/bus_control.v
-set_global_assignment -name VERILOG_FILE ../rtl/cpu/bus/control_pins_n.v
-set_global_assignment -name VERILOG_FILE ../rtl/cpu/bus/data_pins.v
-set_global_assignment -name VERILOG_FILE ../rtl/cpu/bus/data_switch.v
-set_global_assignment -name VERILOG_FILE ../rtl/cpu/bus/data_switch_mask.v
-set_global_assignment -name VERILOG_FILE ../rtl/cpu/bus/inc_dec.v
-set_global_assignment -name VERILOG_FILE ../rtl/cpu/bus/inc_dec_2bit.v
-set_global_assignment -name VERILOG_FILE ../rtl/cpu/control/clk_delay.v
-set_global_assignment -name VERILOG_FILE ../rtl/cpu/control/decode_state.v
-set_global_assignment -name VERILOG_FILE ../rtl/cpu/control/interrupts.v
-set_global_assignment -name VERILOG_FILE ../rtl/cpu/control/ir.v
-set_global_assignment -name VERILOG_FILE ../rtl/cpu/control/memory_ifc.v
-set_global_assignment -name VERILOG_FILE ../rtl/cpu/control/pin_control.v
-set_global_assignment -name VERILOG_FILE ../rtl/cpu/control/resets.v
-set_global_assignment -name VERILOG_FILE ../rtl/cpu/control/sequencer.v
-set_global_assignment -name VERILOG_FILE ../rtl/cpu/registers/reg_control.v
-set_global_assignment -name VERILOG_FILE ../rtl/cpu/registers/reg_file.v
-set_global_assignment -name VERILOG_FILE ../rtl/cpu/registers/reg_latch.v
 set_global_assignment -name VHDL_FILE ../rtl/rtc/fifo.vhd
 set_global_assignment -name QIP_FILE ../rtl/rtc/fifo_ram.qip
-
 set_instance_assignment -name PARTITION_HIERARCHY root_partition -to | -section_id Top
