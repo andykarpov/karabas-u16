@@ -483,7 +483,7 @@ str1
 ;          "                                "
 	db 23,0,0,17,47,"ReVerSE-U16 By MVV",13,13,13
 	db 17,7,"FPGA Core - Karabas-4096",13
-	db "(build 20190718)",13,13
+	db "(build 20190719)",13,13
 	db "Copying data from FLASH...",0
 str3
 	db 17,4," done",17,7,13,0

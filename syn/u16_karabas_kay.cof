@@ -2,7 +2,7 @@
 <cof>
 	<eprom_name>EPCS16</eprom_name>
 	<flash_loader_device>EP4CE22</flash_loader_device>
-	<output_filename>u16_speccy_revC.jic</output_filename>
+	<output_filename>u16_karabas.jic</output_filename>
 	<n_pages>1</n_pages>
 	<width>1</width>
 	<mode>7</mode>
@@ -27,7 +27,7 @@
 		<hex_offset>770048</hex_offset>
 	</hex_block>
 	<hex_block>
-		<hex_filename>/home/andy/Documents/Projects/Retrocomp/FPGA/Reverse/speccy-u16/rom/services_kay_0.2c.hex</hex_filename>
+		<hex_filename>../rom/services_kay_0.2c.hex</hex_filename>
 		<hex_addressing>relative</hex_addressing>
 		<hex_offset>753664</hex_offset>
 	</hex_block>
@@ -41,7 +41,7 @@
 		<user_name>Page_0</user_name>
 		<page_flags>1</page_flags>
 		<bit0>
-			<sof_filename>u16_speccy_revC.sof</sof_filename>
+			<sof_filename>u16_karabas.sof</sof_filename>
 		</bit0>
 	</sof_data>
 	<version>5</version>

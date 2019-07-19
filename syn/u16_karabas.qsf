@@ -25,7 +25,7 @@
 # Notes:
 #
 # 1) The default values for assignments are stored in the file:
-#		u16_speccy_revC_assignment_defaults.qdf
+#		u16_karabas_assignment_defaults.qdf
 #    If this file doesn't exist, see file:
 #		assignment_defaults.qdf
 #
@@ -38,7 +38,7 @@
 
 set_global_assignment -name FAMILY "Cyclone IV E"
 set_global_assignment -name DEVICE EP4CE22E22C8
-set_global_assignment -name TOP_LEVEL_ENTITY speccy
+set_global_assignment -name TOP_LEVEL_ENTITY karabas_top
 set_global_assignment -name ORIGINAL_QUARTUS_VERSION 13.1
 set_global_assignment -name PROJECT_CREATION_TIME_DATE "12:26:48  AUGUST 14, 2017"
 set_global_assignment -name LAST_QUARTUS_VERSION 13.1
@@ -157,12 +157,23 @@ set_global_assignment -name MIN_CORE_JUNCTION_TEMP 0
 set_global_assignment -name MAX_CORE_JUNCTION_TEMP 85
 
 
+set_global_assignment -name VHDL_FILE ../rtl/loader/nz80cpu.vhd
+set_global_assignment -name VHDL_FILE ../rtl/loader/loader_video.vhd
+set_global_assignment -name VHDL_FILE ../rtl/loader/loader_spi.vhd
+set_global_assignment -name VHDL_FILE ../rtl/loader/loader_scan_convert.vhd
+set_global_assignment -name VHDL_FILE ../rtl/loader/loader_rom.vhd
+set_global_assignment -name QIP_FILE ../rtl/loader/loader_rom.qip
+set_global_assignment -name VHDL_FILE ../rtl/loader/loader_ram_scan.vhd
+set_global_assignment -name QIP_FILE ../rtl/loader/loader_ram_scan.qip
+set_global_assignment -name VHDL_FILE ../rtl/loader/loader_ram.vhd
+set_global_assignment -name QIP_FILE ../rtl/loader/loader_ram.qip
+set_global_assignment -name VHDL_FILE ../rtl/loader/loader.vhd
 set_global_assignment -name VHDL_FILE ../rtl/hid/receiver.vhd
 set_global_assignment -name VHDL_FILE ../rtl/hid/deserializer.vhd
 set_global_assignment -name VHDL_FILE ../rtl/video/scan_converter.vhd
 set_global_assignment -name VHDL_FILE ../rtl/video/ram_scan.vhd
 set_global_assignment -name QIP_FILE ../rtl/video/ram_scan.qip
-set_global_assignment -name VHDL_FILE ../rtl/speccy.vhd
+set_global_assignment -name VHDL_FILE ../rtl/karabas_top.vhd
 set_global_assignment -name VHDL_FILE ../rtl/video/video.vhd
 set_global_assignment -name VHDL_FILE ../rtl/turbosound/turbosound.vhd
 set_global_assignment -name VHDL_FILE ../rtl/ssg/ay8910.vhd
@@ -228,4 +239,5 @@ set_global_assignment -name VERILOG_FILE ../rtl/cpu/registers/reg_file.v
 set_global_assignment -name VERILOG_FILE ../rtl/cpu/registers/reg_latch.v
 set_global_assignment -name VHDL_FILE ../rtl/rtc/fifo.vhd
 set_global_assignment -name QIP_FILE ../rtl/rtc/fifo_ram.qip
+
 set_instance_assignment -name PARTITION_HIERARCHY root_partition -to | -section_id Top

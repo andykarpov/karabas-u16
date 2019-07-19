@@ -64,7 +64,7 @@
  ---------------------------------------------------------------------------------
 
 Quartus II 32-bit Version 13.1.0 Build 162 10/23/2013 SJ Web Edition
-CHIP  "u16_speccy_revC"  ASSIGNED TO AN: EP4CE22E22C8
+CHIP  "u16_karabas"  ASSIGNED TO AN: EP4CE22E22C8
 
 Pin Name/Usage               : Location  : Dir.   : I/O Standard      : Voltage : I/O Bank  : User Assignment
 -------------------------------------------------------------------------------------------------------------
