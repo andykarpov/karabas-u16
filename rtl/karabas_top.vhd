@@ -145,6 +145,7 @@ signal cpu0_mult	: std_logic_vector(1 downto 0);
 signal cpu0_mem_wr	: std_logic;
 signal cpu0_mem_rd	: std_logic;
 signal cpu0_nmi_n	: std_logic;
+signal cpu0_wait_n : std_logic := '1';
 -- Memory
 signal ram_a_bus	: std_logic_vector(11 downto 0);
 -- Port
@@ -303,7 +304,7 @@ port map (
 	RESET_n		=> cpu0_reset_n,
 	CLK_n		=> clk_bus,
 	ENA		=> cpuclk,
-	WAIT_n		=> '1',--cpu_wait_n,
+	WAIT_n		=> cpu0_wait_n,
 	INT_n		=> cpu0_int_n,
 	NMI_n		=> cpu0_nmi_n,
 	BUSRQ_n		=> '1',
@@ -554,13 +555,13 @@ port map (
 -- HDMI output
 U14: entity work.hdmi
 generic map (
-	FREQ				=> 25200000,	-- pixel clock frequency = 25.2MHz
-	FS					=> 48000,	-- audio sample rate - should be 32000, 41000 or 48000 = 48KHz
-	CTS				=> 25200,	-- CTS = Freq(pixclk) * N / (128 * Fs)
+	FREQ				=> 28000000,	-- pixel clock frequency = 25.2MHz
+	FS					=> 32000,	-- audio sample rate - should be 32000, 41000 or 48000 = 48KHz
+	CTS				=> 28000,	-- CTS = Freq(pixclk) * N / (128 * Fs)
 	N					=> 6144)	-- N = 128 * Fs /1000,  128 * Fs /1500 <= N <= 128 * Fs /300 (Check HDMI spec 7.2 for details)
 port map (
-	I_CLK_VGA		=> clk_bus,
-	I_CLK_TMDS		=> clk_hdmi,
+	I_CLK_VGA		=> clk_bus, -- 28 MHz
+	I_CLK_TMDS		=> clk_hdmi, -- 140 MHz
 	I_HSYNC			=> vga_hsync,
 	I_VSYNC			=> vga_vsync,
 	I_BLANK			=> not vga_blank,
@@ -596,8 +597,10 @@ key_global_reset <= kb_f_bus(2);
 cpu0_reset_n <= not(reset) and not(kb_f_bus(4)) and not(loader_reset);					-- CPU reset
 cpu0_inta_n <= cpu0_iorq_n or cpu0_m1_n;	-- INTA
 cpu0_nmi_n <= not kb_f_bus(5);				-- NMI
+--cpu0_wait_n <= not mc146818_busy; -- WAIT
+cpu0_wait_n <= '1';
 
-cpuclk <= clk_bus and cpu0_ena;
+cpuclk <= clk_bus and cpu0_ena when mc146818_busy = '0' else '0';
 cpu0_mult <= "00"; -- normal 3.5MHz mode, no turbo
 process (cpu0_mult, ena_3_5mhz, ena_7mhz, ena_14mhz)
 begin
@@ -637,27 +640,6 @@ SD_SI 	<= zc_mosi;
 
 -------------------------------------------------------------------------------
 -- Ports
-
--- todo:
--- Порт #7FFD будет разделён на 2 части:
--- а) - первая часть, которая отвечает за основные 128Кб, скрин, выбор ПЗУ - у неё своя дешифрация:
--- Я уже давно применил схему, которая описана во многих изданиях, которая отслеживает короткие команды OUT (#FD),A и IN (#FD),A.
--- Как только на шине данных встречается код такой команды при активном сигнале М1, 
--- моментально блокируются все порты дополнительного расширения памяти, а первая часть порта #7FFD переводится на мягкую дешифрацию, 
--- с проверкой только A15 и A1. При повторной активизации сигнала М1, если на шине данных код любой другой команды, 
--- первая часть #7FFD снова переводится на более жёсткую дешифрацию с проверкой A14, A15 и A1, 
--- и разблокируются порты дополнительного расширения ОЗУ.
---
--- б) - вторая часть #7FFD, которая отвечает за расширение >128Кб, а так же все остальные порты - #1FFD, #DFFD, #FDFD 
--- - у них всегда только жёсткая дешифрация с проверкой A15, A14, A13, A9 и A1.
---
--- Данное решение у меня уже давно работает, в результате, не смотря на доступный порт #1FFD и полный порт #7FFD, 
--- с доступной памятью 4Мб, без проблем работают Insult Megademo и STS3.3.
---
--- Бит D5 блокировки порта #7FFD, скорей всего, будет на всегда похоронен. В нескольких режимах будет отвечать только за расширение памяти. 
--- Но я подумаю, может быть в тех режимах, где он не используется для расширения памяти, его использовать для блокировки #7FFD ?
--- В моём Пентагоне D5 на всегда утратил функцию блокировки #7FFD, и я не вижу чтобы это приводило к печальным результатам, 
--- поэтому смысла в нём я не вижу.
 
 process (reset, clk_bus, cpu0_a_bus, dos_act, port_1ffd_reg, port_7ffd_reg, port_dffd_reg, cpu0_mreq_n, cpu0_wr_n, cpu0_do_bus)
 begin
@@ -761,7 +743,7 @@ begin
 		when "01111" => cpu0_di_bus <= ssg_cn1_bus;
 		when "10100" => cpu0_di_bus <= port_7ffd_reg;
 		when "10101" => cpu0_di_bus <= port_dffd_reg;
---		when "10110" => cpu0_di_bus <= vid_attr;
+		when "10110" => cpu0_di_bus <= vid_attr;
 		when "10111" => cpu0_di_bus <= port_eff7_reg;
 		when others  => cpu0_di_bus <= (others => '1');
 	end case;
@@ -772,9 +754,9 @@ selector <=
 			"00110" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and port_bff7 = '1' and port_eff7_reg(7) = '1') else 									-- MC146818A
 			"00111" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_a_bus( 7 downto 0) = X"FE") else 													-- Keyboard, port #FE
 			"01000" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_a_bus( 7 downto 6) = "01" and cpu0_a_bus(4 downto 0) = "10111") else 	-- Z-Controller
-			"01101" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_a_bus( 7 downto 0) = X"1F" and dos_act = '0') else 							-- Joystick, port #1F
-			"01110" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_a_bus(15 downto 0) = X"FFFD" and ssg_sel = '0') else 						-- TurboSound
-			"01111" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_a_bus(15 downto 0) = X"FFFD" and ssg_sel = '1') else
+--			"01101" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_a_bus( 7 downto 0) = X"1F" and dos_act = '0') else 							-- Joystick, port #1F
+--			"01110" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_a_bus(15 downto 0) = X"FFFD" and ssg_sel = '0') else 						-- TurboSound
+--			"01111" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_a_bus(15 downto 0) = X"FFFD" and ssg_sel = '1') else
 			"10100" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_a_bus(15 downto 0) = X"7FFD") else													-- port #7FFD
 			"10101" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_a_bus(15 downto 0) = X"DFFD") else													-- port #DFFD
 --			"10110" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_a_bus( 7 downto 0) = X"FF") else													-- attributes #FF
