@@ -158,12 +158,40 @@ set_global_assignment -name MAX_CORE_JUNCTION_TEMP 85
 
 
 
+set_location_assignment PIN_39 -to USB_RX
+set_location_assignment PIN_49 -to USB_CLK
+set_location_assignment PIN_52 -to USB_SO
+set_location_assignment PIN_54 -to USB_IO3
+set_location_assignment PIN_71 -to AP
+set_location_assignment PIN_72 -to AN
+set_location_assignment PIN_89 -to BP
+set_location_assignment PIN_88 -to BN
+set_location_assignment PIN_91 -to CP
+set_location_assignment PIN_90 -to CN
+set_location_assignment PIN_127 -to SD_NDET
+set_location_assignment PIN_129 -to SQW
+set_global_assignment -name PHYSICAL_SYNTHESIS_ASYNCHRONOUS_SIGNAL_PIPELINING ON
+set_global_assignment -name PHYSICAL_SYNTHESIS_REGISTER_DUPLICATION ON
+set_global_assignment -name PHYSICAL_SYNTHESIS_COMBO_LOGIC_FOR_AREA ON
+set_global_assignment -name PHYSICAL_SYNTHESIS_MAP_LOGIC_TO_MEMORY_FOR_AREA ON
+set_global_assignment -name CYCLONEII_OPTIMIZATION_TECHNIQUE SPEED
+set_global_assignment -name ALLOW_POWER_UP_DONT_CARE OFF
+set_instance_assignment -name GLOBAL_SIGNAL "GLOBAL CLOCK" -to CLK_50MHZ
+set_global_assignment -name VHDL_FILE ../rtl/t80se/T80se.vhd
+set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/sound/turbosound/ym2149.sv
+set_global_assignment -name VHDL_FILE ../rtl/sound/turbosound/turbosound.vhd
+set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/sound/turbosound/saa1099.sv
+set_global_assignment -name VHDL_FILE ../rtl/sound/soundrive/soundrive.vhd
+set_global_assignment -name VERILOG_FILE ../rtl/hdmi/hdmidataencoder.v
+set_global_assignment -name VHDL_FILE ../rtl/hdmi/hdmi.vhd
+set_global_assignment -name VHDL_FILE ../rtl/hdmi/encoder.vhd
+set_global_assignment -name VHDL_FILE ../rtl/hdmi/altddio_out1.vhd
+set_global_assignment -name QIP_FILE ../rtl/hdmi/altddio_out1.qip
 set_global_assignment -name VHDL_FILE ../rtl/t80se/T80_Reg.vhd
 set_global_assignment -name VHDL_FILE ../rtl/t80se/T80_Pack.vhd
 set_global_assignment -name VHDL_FILE ../rtl/t80se/T80_MCode.vhd
 set_global_assignment -name VHDL_FILE ../rtl/t80se/T80_ALU.vhd
 set_global_assignment -name VHDL_FILE ../rtl/t80se/T80.vhd
-set_global_assignment -name VHDL_FILE ../rtl/t80se/T80se.vhd
 set_global_assignment -name VHDL_FILE ../rtl/loader/loader_video.vhd
 set_global_assignment -name VHDL_FILE ../rtl/loader/loader_spi.vhd
 set_global_assignment -name VHDL_FILE ../rtl/loader/loader_scan_convert.vhd
@@ -181,10 +209,7 @@ set_global_assignment -name VHDL_FILE ../rtl/video/ram_scan.vhd
 set_global_assignment -name QIP_FILE ../rtl/video/ram_scan.qip
 set_global_assignment -name VHDL_FILE ../rtl/karabas_top.vhd
 set_global_assignment -name VHDL_FILE ../rtl/video/video.vhd
-set_global_assignment -name VHDL_FILE ../rtl/turbosound/turbosound.vhd
-set_global_assignment -name VHDL_FILE ../rtl/ssg/ay8910.vhd
 set_global_assignment -name VHDL_FILE ../rtl/spi/spi.vhd
-set_global_assignment -name VHDL_FILE ../rtl/soundrive/soundrive.vhd
 set_global_assignment -name VHDL_FILE ../rtl/sdram/sdram.vhd
 set_global_assignment -name VHDL_FILE ../rtl/sd/zcontroller.vhd
 set_global_assignment -name VHDL_FILE ../rtl/rtc/mc146818a.vhd
@@ -197,14 +222,7 @@ set_global_assignment -name QIP_FILE ../rtl/ram/altram0.qip
 set_global_assignment -name VHDL_FILE ../rtl/pll/altpll0.vhd
 set_global_assignment -name QIP_FILE ../rtl/pll/altpll0.qip
 set_global_assignment -name VHDL_FILE ../rtl/i2c/i2c.vhd
-set_global_assignment -name VERILOG_FILE ../rtl/hdmi/hdmidataencoder.v
-set_global_assignment -name VHDL_FILE ../rtl/hdmi/hdmi.vhd
-set_global_assignment -name VHDL_FILE ../rtl/hdmi/encoder.vhd
-set_global_assignment -name VHDL_FILE ../rtl/hdmi/altddio_out1.vhd
-set_global_assignment -name QIP_FILE ../rtl/hdmi/altddio_out1.qip
-set_global_assignment -name VHDL_FILE ../rtl/divmmc/divmmc.vhd
 set_global_assignment -name VHDL_FILE ../rtl/dac/dac.vhd
-set_global_assignment -name VHDL_FILE ../rtl/rtc/fifo.vhd
-set_global_assignment -name QIP_FILE ../rtl/rtc/fifo_ram.qip
 set_global_assignment -name VHDL_FILE ../rtl/rtc/i2c_master.vhd
+set_global_assignment -name QIP_FILE ../rtl/pll/altpll1.qip
 set_instance_assignment -name PARTITION_HIERARCHY root_partition -to | -section_id Top

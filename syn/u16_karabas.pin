@@ -106,7 +106,7 @@ VCCA1                        : 35        : power  :                   : 2.5V    
 GNDA1                        : 36        : gnd    :                   :         :           :                
 VCCD_PLL1                    : 37        : power  :                   : 1.2V    :           :                
 VCCINT                       : 38        : power  :                   : 1.2V    :           :                
-RESERVED_INPUT               : 39        :        :                   :         : 3         :                
+USB_RX                       : 39        : input  : 3.3-V LVTTL       :         : 3         : Y              
 VCCIO3                       : 40        : power  :                   : 3.3V    : 3         :                
 GND                          : 41        : gnd    :                   :         :           :                
 SDRAM_DQ[14]                 : 42        : bidir  : 3.3-V LVTTL       :         : 3         : Y              
@@ -116,12 +116,12 @@ VCCINT                       : 45        : power  :                   : 1.2V    
 SDRAM_DQ[11]                 : 46        : bidir  : 3.3-V LVTTL       :         : 3         : Y              
 VCCIO3                       : 47        : power  :                   : 3.3V    : 3         :                
 GND                          : 48        : gnd    :                   :         :           :                
-RESERVED_INPUT               : 49        :        :                   :         : 3         :                
-RESERVED_INPUT               : 50        :        :                   :         : 3         :                
-RESERVED_INPUT               : 51        :        :                   :         : 3         :                
-GND+                         : 52        :        :                   :         : 3         :                
+USB_CLK                      : 49        : input  : 3.3-V LVTTL       :         : 3         : Y              
+USB_SI                       : 50        : input  : 3.3-V LVTTL       :         : 3         : Y              
+USB_NCS                      : 51        : input  : 3.3-V LVTTL       :         : 3         : Y              
+USB_SO                       : 52        : input  : 3.3-V LVTTL       :         : 3         : Y              
 USB_TX                       : 53        : input  : 3.3-V LVTTL       :         : 3         : Y              
-GND+                         : 54        :        :                   :         : 4         :                
+USB_IO3                      : 54        : input  : 3.3-V LVTTL       :         : 4         : Y              
 USB_IO1                      : 55        : input  : 3.3-V LVTTL       :         : 4         : Y              
 VCCIO4                       : 56        : power  :                   : 3.3V    : 4         :                
 GND                          : 57        : gnd    :                   :         :           :                
@@ -138,8 +138,8 @@ SDRAM_A[9]                   : 67        : output : 3.3-V LVTTL       :         
 OUT_L                        : 68        : output : 3.3-V LVTTL       :         : 4         : Y              
 OUT_R                        : 69        : output : 3.3-V LVTTL       :         : 4         : Y              
 VCCINT                       : 70        : power  :                   : 1.2V    :           :                
-RESERVED_INPUT               : 71        :        :                   :         : 4         :                
-RESERVED_INPUT               : 72        :        :                   :         : 4         :                
+AP                           : 71        : input  : 3.3-V LVTTL       :         : 4         : Y              
+AN                           : 72        : input  : 3.3-V LVTTL       :         : 4         : Y              
 VCCD_PLL4                    : 73        : power  :                   : 1.2V    :           :                
 GNDA4                        : 74        : gnd    :                   :         :           :                
 VCCA4                        : 75        : power  :                   : 2.5V    :           :                
@@ -155,10 +155,10 @@ VCCINT                       : 84        : power  :                   : 1.2V    
 SDRAM_A[8]                   : 85        : output : 3.3-V LVTTL       :         : 5         : Y              
 SDRAM_A[1]                   : 86        : output : 3.3-V LVTTL       :         : 5         : Y              
 SDRAM_A[2]                   : 87        : output : 3.3-V LVTTL       :         : 5         : Y              
-GND+                         : 88        :        :                   :         : 5         :                
-GND+                         : 89        :        :                   :         : 5         :                
-GND+                         : 90        :        :                   :         : 6         :                
-GND+                         : 91        :        :                   :         : 6         :                
+BN                           : 88        : input  : 3.3-V LVTTL       :         : 5         : Y              
+BP                           : 89        : input  : 3.3-V LVTTL       :         : 5         : Y              
+CN                           : 90        : input  : 3.3-V LVTTL       :         : 6         : Y              
+CP                           : 91        : input  : 3.3-V LVTTL       :         : 6         : Y              
 CONF_DONE                    : 92        :        :                   :         : 6         :                
 VCCIO6                       : 93        : power  :                   : 3.3V    : 6         :                
 MSEL0                        : 94        :        :                   :         : 6         :                
@@ -194,9 +194,9 @@ GND                          : 123       : gnd    :                   :         
 VCCINT                       : 124       : power  :                   : 1.2V    :           :                
 SDRAM_DQ[5]                  : 125       : bidir  : 3.3-V LVTTL       :         : 7         : Y              
 SD_SO                        : 126       : input  : 3.3-V LVTTL       :         : 7         : Y              
-GND+                         : 127       :        :                   :         : 7         :                
+SD_NDET                      : 127       : input  : 3.3-V LVTTL       :         : 7         : Y              
 GND+                         : 128       :        :                   :         : 8         :                
-GND+                         : 129       :        :                   :         : 8         :                
+SQW                          : 129       : input  : 3.3-V LVTTL       :         : 8         : Y              
 VCCIO8                       : 130       : power  :                   : 3.3V    : 8         :                
 GND                          : 131       : gnd    :                   :         :           :                
 TMDS[2]                      : 132       : output : 3.3-V LVTTL       :         : 8         : Y              

@@ -92,7 +92,8 @@ port (
 	-- RTC (DS1338Z-33+)
 	I2C_SCL		: inout std_logic;
 	I2C_SDA		: inout std_logic;
-
+	SQW 			: in std_logic;  -- dedicated clock / input only
+	
 	-- SPI FLASH (M25P16)
 	DATA0		: in std_logic;
 	NCSO		: out std_logic;
@@ -101,26 +102,41 @@ port (
 
 	-- SPI (ENC424J600)
 	ETH_SO		: in std_logic;
-	ETH_NINT	: in std_logic;
+	ETH_NINT		: in std_logic;
 	ETH_NCS		: out std_logic;
 
 	-- HDMI
 	TMDS	: out std_logic_vector(7 downto 0);
 
 	-- External I/O
-	OUT_L	: out std_logic;
-	OUT_R	: out std_logic;
+	OUT_L	: out std_logic; -- DN (PIN_68) 
+	OUT_R	: out std_logic; -- DP (PIN_69)
 	
 	-- SD/MMC Card
-	SD_SO		: in std_logic;
-	SD_SI		: out std_logic;
+	SD_SO			: in std_logic;
+	SD_SI			: out std_logic;
 	SD_CLK		: out std_logic;
 	SD_NCS		: out std_logic;
+	SD_NDET 		: in std_logic; -- dedicated clock / input only
 	
 	-- USB
-	USB_NRESET              : in std_logic;
-	USB_TX                  : in std_logic;
-	USB_IO1                 : in std_logic
+	USB_NRESET     : in std_logic;
+	USB_TX         : in std_logic;
+	USB_IO1        : in std_logic;
+	USB_RX 			: in std_logic;
+	USB_CLK 			: in std_logic;
+	USB_SI 			: in std_logic;
+	USB_NCS 			: in std_logic;
+	USB_SO 			: in std_logic; -- dedicated clock / input only
+	USB_IO3 			: in std_logic; -- dedicated clock / input only 
+	
+	-- uBus
+	AP 				: in std_logic;
+	AN 				: in std_logic;
+	BP					: in std_logic; -- dedicated clock / input only 
+	BN 				: in std_logic; -- dedicated clock / input only
+	CP					: in std_logic; -- dedicated clock / input only
+	CN 				: in std_logic  -- dedicated clock / input only	
 );
 end karabas_top;
 
@@ -197,6 +213,8 @@ signal mc146818_do_bus	: std_logic_vector(7 downto 0);
 signal mc146818_busy		: std_logic;
 signal port_bff7	: std_logic;
 signal port_eff7_reg	: std_logic_vector(7 downto 0);
+signal fd_port 	: std_logic;
+signal fd_sel 		: std_logic;
 -- SDRAM
 signal sdr_a_bus  : std_logic_vector(24 downto 0);
 signal sdr_di_bus : std_logic_vector(7 downto 0);
@@ -216,20 +234,23 @@ signal ssg_cn1_b	: std_logic_vector(7 downto 0);
 signal ssg_cn1_c	: std_logic_vector(7 downto 0);
 signal audio_l		: std_logic_vector(15 downto 0);
 signal audio_r		: std_logic_vector(15 downto 0);
-signal dac_s_l		: std_logic_vector(15 downto 0);
-signal dac_s_r		: std_logic_vector(15 downto 0);
 signal sound		: std_logic_vector(7 downto 0);
 -- Soundrive
 signal covox_a		: std_logic_vector(7 downto 0);
 signal covox_b		: std_logic_vector(7 downto 0);
 signal covox_c		: std_logic_vector(7 downto 0);
 signal covox_d		: std_logic_vector(7 downto 0);
+-- SAA1099
+signal saa_wr_n		: std_logic;
+signal saa_out_l	: std_logic_vector(7 downto 0);
+signal saa_out_r	: std_logic_vector(7 downto 0);
 -- CLOCK
 signal clk_bus		: std_logic;
 signal clk_sdr		: std_logic;
 signal clk_hdmi		: std_logic;
 signal clk7		: std_logic;
 signal clk14		: std_logic;
+signal clk_saa 	: std_logic;
 ------------------------------------
 signal ena_14mhz	: std_logic;
 signal ena_7mhz		: std_logic;
@@ -252,6 +273,7 @@ signal key_f		: std_logic_vector(12 downto 1);
 signal key		: std_logic_vector(12 downto 1) := "000000000000";
 signal mux		: std_logic_vector(3 downto 0);
 signal ram_ext : std_logic_vector(7 downto 0) := "00000000";
+signal ram_ext_lock : std_logic := '0';
 -- Loader
 signal loader_ram_di	: std_logic_vector(7 downto 0);
 signal loader_ram_do	: std_logic_vector(7 downto 0);
@@ -279,6 +301,19 @@ signal host_vga_hs : std_logic;
 signal host_vga_vs : std_logic;
 signal host_vga_sblank : std_logic;
 
+component saa1099
+port (
+	clk_sys		: in std_logic;
+	ce		: in std_logic;		--8 MHz
+	rst_n		: in std_logic;
+	cs_n		: in std_logic;
+	a0		: in std_logic;		--0=data, 1=address
+	wr_n		: in std_logic;
+	din		: in std_logic_vector(7 downto 0);
+	out_l		: out std_logic_vector(7 downto 0);
+	out_r		: out std_logic_vector(7 downto 0));
+end component;
+
 begin
 
 -- PLL
@@ -290,8 +325,17 @@ port map (
 	c0					=> clk_bus,		--  28.0 MHz
 	c1					=> clk7,			--   7.0 MHz
 	c2					=> clk14,		--  14.0 MHz
-	c3					=> clk_sdr,		--  84.0 MHz
+	c3					=> open,			--  84.0 MHz
 	c4					=> clk_hdmi);	-- 140.0 MHz
+	
+-- SDRAM PLL
+U00: entity work.altpll1
+port map (
+	areset			=> areset,
+	inclk0			=> CLK_50MHZ,	--  50.0 MHz
+	locked 			=> open,
+	c0					=> clk_sdr,			-- 84.0 MHz
+	c1 				=> clk_saa);		--  8.0 MHz	
 	
 -- Zilog Z80A CPU
 U1: entity work.T80se
@@ -301,7 +345,7 @@ generic map (
 	IOWait		=> 1 )	-- 0 => Single cycle I/O, 1 => Std I/O cycle
 
 port map (
-	RESET_n		=> cpu0_reset_n,
+	RESET_n		=> not reset,
 	CLK_n		=> clk_bus,
 	ENA		=> cpuclk,
 	WAIT_n		=> cpu0_wait_n,
@@ -433,23 +477,25 @@ port map (
 -- TurboSound
 U7: entity work.turbosound
 port map (
-	RESET				=> reset,
-	CLK				=> clk_bus,
-	ENA				=> ena_1_75mhz,
-	A					=> cpu0_a_bus,
-	DI					=> cpu0_do_bus,
-	WR_n				=> cpu0_wr_n,
-	IORQ_n			=> cpu0_iorq_n,
-	M1_n				=> cpu0_m1_n,
-	SEL				=> ssg_sel,
-	CN0_DO			=> ssg_cn0_bus,
-	CN0_A				=> ssg_cn0_a,
-	CN0_B				=> ssg_cn0_b,
-	CN0_C				=> ssg_cn0_c,
-	CN1_DO			=> ssg_cn1_bus,
-	CN1_A				=> ssg_cn1_a,
-	CN1_B				=> ssg_cn1_b,
-	CN1_C				=> ssg_cn1_c);
+	I_CLK		=> clk_bus,
+	I_ENA		=> ena_1_75mhz,
+	I_ADDR		=> cpu0_a_bus,
+	I_DATA		=> cpu0_do_bus,
+	I_WR_N		=> cpu0_wr_n,
+	I_IORQ_N	=> cpu0_iorq_n,
+	I_M1_N		=> cpu0_m1_n,
+	I_RESET_N	=> not reset,
+	O_SEL		=> ssg_sel,
+	-- ssg0
+	O_SSG0_DA	=> ssg_cn0_bus,
+	O_SSG0_AUDIO_A	=> ssg_cn0_a,
+	O_SSG0_AUDIO_B	=> ssg_cn0_b,
+	O_SSG0_AUDIO_C	=> ssg_cn0_c,
+	-- ssg1
+	O_SSG1_DA	=> ssg_cn1_bus,
+	O_SSG1_AUDIO_A	=> ssg_cn1_a,
+	O_SSG1_AUDIO_B	=> ssg_cn1_b,
+	O_SSG1_AUDIO_C	=> ssg_cn1_c);
 
 -- SDRAM Controller
 U8: entity work.sdram
@@ -492,34 +538,34 @@ port map (
 -- Soundrive
 U10: entity work.soundrive
 port map (
-	RESET				=> reset,
-	CLK				=> clk_bus,
-	CS					=> key_f(11),
-	WR_n				=> cpu0_wr_n,
-	A					=> cpu0_a_bus(7 downto 0),
-	DI					=> cpu0_do_bus,
-	IORQ_n			=> cpu0_iorq_n,
-	DOS				=> dos_act,
-	OUTA				=> covox_a,
-	OUTB				=> covox_b,
-	OUTC				=> covox_c,
-	OUTD				=> covox_d);
+	I_RESET		=> reset,
+	I_CLK		=> clk_bus,
+	I_CS		=> '1',
+	I_WR_N		=> cpu0_wr_n,
+	I_ADDR		=> cpu0_a_bus(7 downto 0),
+	I_DATA		=> cpu0_do_bus,
+	I_IORQ_N	=> cpu0_iorq_n,
+	I_DOS		=> dos_act,
+	O_COVOX_A	=> covox_a,
+	O_COVOX_B	=> covox_b,
+	O_COVOX_C	=> covox_c,
+	O_COVOX_D	=> covox_d);
 
 -- Delta-Sigma
 U11: entity work.dac
 port map (
-    CLK   			=> clk_sdr,
-    RESET 			=> areset,
-    DAC_DATA		=> dac_s_l,
-    DAC_OUT   		=> OUT_L);
+    I_CLK   			=> clk_sdr,
+    I_RESET 			=> areset,
+    I_DATA		=> audio_l,
+    O_DAC   		=> OUT_L);
 
 -- Delta-Sigma
 U12: entity work.dac
 port map (
-    CLK   			=> clk_sdr,
-    RESET 			=> areset,
-    DAC_DATA		=> dac_s_r,
-    DAC_OUT   		=> OUT_R);
+    I_CLK   			=> clk_sdr,
+    I_RESET 			=> areset,
+    I_DATA		=> audio_r,
+    O_DAC   		=> OUT_R);
 	 
 -- Scan doubler
 U13 : entity work.scan_convert
@@ -572,6 +618,32 @@ port map (
 	I_AUDIO_PCM_R	=> audio_r,
 	O_TMDS			=> TMDS);
 
+-- no sound version
+--U14: entity work.hdmi
+--port map (
+--	I_CLK_PIXEL		=> clk_bus, -- 28 MHz
+--	I_CLK_TMDS		=> clk_hdmi, -- 140 MHz
+--	I_HSYNC			=> vga_hsync,
+--	I_VSYNC			=> vga_vsync,
+--	I_BLANK			=> not vga_blank,
+--	I_RED				=> vga_r & vga_r & vga_r & vga_r,
+--	I_GREEN			=> vga_g & vga_g & vga_g & vga_g,
+--	I_BLUE			=> vga_b & vga_b & vga_b & vga_b,
+--	O_TMDS			=> TMDS);
+
+U15: saa1099
+port map(
+	clk_sys		=> clk_saa,
+	ce		=> '1',			-- 8 MHz
+	rst_n		=> not reset,
+	cs_n		=> '0',
+	a0		=> cpu0_a_bus(8),		-- 0=data, 1=address
+	wr_n		=> saa_wr_n,
+	din		=> cpu0_do_bus,
+	out_l		=> saa_out_l,
+	out_r		=> saa_out_r);
+
+
 -------------------------------------------------------------------------------
 -- Global signals
 
@@ -597,10 +669,10 @@ key_global_reset <= kb_f_bus(2);
 cpu0_reset_n <= not(reset) and not(kb_f_bus(4)) and not(loader_reset);					-- CPU reset
 cpu0_inta_n <= cpu0_iorq_n or cpu0_m1_n;	-- INTA
 cpu0_nmi_n <= not kb_f_bus(5);				-- NMI
---cpu0_wait_n <= not mc146818_busy; -- WAIT
-cpu0_wait_n <= '1';
-
-cpuclk <= clk_bus and cpu0_ena when mc146818_busy = '0' else '0';
+--cpu0_wait_n <= '1';
+--cpuclk <= clk_bus and cpu0_ena when mc146818_busy = '0' else '0';
+cpu0_wait_n <= not mc146818_busy; -- WAIT
+cpuclk <= clk_bus and cpu0_ena;
 cpu0_mult <= "00"; -- normal 3.5MHz mode, no turbo
 process (cpu0_mult, ena_3_5mhz, ena_7mhz, ena_14mhz)
 begin
@@ -641,7 +713,27 @@ SD_SI 	<= zc_mosi;
 -------------------------------------------------------------------------------
 -- Ports
 
-process (reset, clk_bus, cpu0_a_bus, dos_act, port_1ffd_reg, port_7ffd_reg, port_dffd_reg, cpu0_mreq_n, cpu0_wr_n, cpu0_do_bus)
+-- #FD port correction
+-- IN A, (#FD) - read a value from a hardware port 
+-- OUT (#FD), A - writes the value of the second operand into the port given by the first operand.
+fd_sel <= '0' when (
+	(cpu0_do_bus(7 downto 4) = "1101" and cpu0_do_bus(2 downto 0) = "011" and vid_wr = '0') 
+	or (cpu0_di_bus(7 downto 4) = "1101" and cpu0_di_bus(2 downto 0) = "011")
+	) 
+	else '1'; 
+
+process(fd_sel, cpu0_m1_n, reset)
+begin
+	if reset='1' then
+		fd_port <= '1';
+	elsif cpu0_m1_n'event and cpu0_m1_n = '1' then 
+		fd_port <= fd_sel;
+	end if;
+end process;
+
+ram_ext_lock <= '0' when (port_eff7_reg(2) = '0' or (port_eff7_reg(2) = '1' and port_7ffd_reg(5) = '0')) else '1';
+
+process (reset, clk_bus, cpu0_a_bus, dos_act, port_1ffd_reg, port_7ffd_reg, port_dffd_reg, cpu0_mreq_n, cpu0_m1_n, cpu0_wr_n, cpu0_do_bus, fd_port)
 begin
 	if reset = '1' then
 		port_eff7_reg <= (others => '0');
@@ -650,17 +742,31 @@ begin
 		port_dffd_reg <= (others => '0');
 		dos_act <= '1';
 	elsif clk_bus'event and clk_bus = '1' then
-		if cpu0_iorq_n = '0' and cpu0_wr_n = '0' and cpu0_a_bus(7 downto 0) = X"FE" then port_xxfe_reg <= cpu0_do_bus; end if;
-		if cpu0_iorq_n = '0' and cpu0_wr_n = '0' and cpu0_a_bus = X"EFF7" then port_eff7_reg <= cpu0_do_bus; end if;
-		if cpu0_iorq_n = '0' and cpu0_wr_n = '0' and cpu0_a_bus = X"1FFD" then port_1ffd_reg <= cpu0_do_bus; end if;
-		if cpu0_iorq_n = '0' and cpu0_wr_n = '0' and cpu0_a_bus = X"7FFD" and port_eff7_reg(2) = '0' then  -- pentagon 1024 / skayp 4096 ext mem lock
-			port_7ffd_reg <= cpu0_do_bus;
-		elsif cpu0_iorq_n = '0' and cpu0_wr_n = '0' and cpu0_a_bus = X"7FFD" and port_eff7_reg(2) = '1' and port_7ffd_reg(5) = '0' then 
+		-- #FE
+		if cpu0_iorq_n = '0' and cpu0_wr_n = '0' and cpu0_m1_n = '1' and cpu0_a_bus(0) = '0' then 
+			port_xxfe_reg <= cpu0_do_bus; 
+		end if;
+		-- #EFF7
+		if cpu0_iorq_n = '0' and cpu0_wr_n = '0' and cpu0_m1_n = '1' and cpu0_a_bus = X"EFF7" then 
+			port_eff7_reg <= cpu0_do_bus; 
+		end if;
+		-- #DFF7
+		if cpu0_iorq_n = '0' and cpu0_wr_n = '0' and cpu0_m1_n = '1' and cpu0_a_bus = X"DFF7" and port_eff7_reg(7) = '1' then 
+			mc146818_a_bus <= cpu0_do_bus(5 downto 0); 
+		end if;
+		-- #1FFD
+		if cpu0_iorq_n = '0' and cpu0_wr_n = '0' and cpu0_m1_n = '1' and fd_port = '1' and cpu0_a_bus = X"1FFD" then 
+			port_1ffd_reg <= cpu0_do_bus; 
+		end if;
+		-- #DFFD
+		if cpu0_iorq_n = '0' and cpu0_wr_n = '0' and cpu0_m1_n = '1' and fd_port = '1' and cpu0_a_bus = X"DFFD" then 
+			port_dffd_reg <= cpu0_do_bus; 
+		end if;
+		-- #7FFD
+		if cpu0_iorq_n = '0' and cpu0_wr_n = '0' and cpu0_m1_n = '1' and (cpu0_a_bus = X"7FFD" or (cpu0_a_bus(15) = '0' and cpu0_a_bus(1) = '0' and fd_port = '0')) and ram_ext_lock = '0' then  -- pentagon 1024 / skayp 4096 ext mem lock
 			port_7ffd_reg <= cpu0_do_bus;
 		end if;
-		--if cpu0_iorq_n = '0' and cpu0_wr_n = '0' and cpu0_a_bus = X"7FFD" then port_7ffd_reg <= cpu0_do_bus; end if; -- 7ffd - kay 1024 without mem lock
-		if cpu0_iorq_n = '0' and cpu0_wr_n = '0' and cpu0_a_bus = X"DFFD" then port_dffd_reg <= cpu0_do_bus; end if;
-		if cpu0_iorq_n = '0' and cpu0_wr_n = '0' and cpu0_a_bus = X"DFF7" and port_eff7_reg(7) = '1' then mc146818_a_bus <= cpu0_do_bus(5 downto 0); end if;
+		-- TR-DOS FLAG
 		if cpu0_m1_n = '0' and cpu0_mreq_n = '0' and cpu0_a_bus(15 downto 8) = X"3D" and port_7ffd_reg(4) = '1' then dos_act <= '1';
 		elsif cpu0_m1_n = '0' and cpu0_mreq_n = '0' and cpu0_a_bus(15 downto 14) /= "00" then dos_act <= '0'; end if;
 	end if;
@@ -700,12 +806,11 @@ ETH_NCS <= '1';
 -- Audio mixer
 
 -- 16bit Delta-Sigma DAC
-audio_l <= (others => '0') when loader_act = '1' else ("00000000" & port_xxfe_reg(4) & "0000000") + ("00000000" & ssg_cn0_a) + ("00000000" & ssg_cn0_b) + ("00000000" & ssg_cn1_a) + ("00000000" & ssg_cn1_b) + ("00000000" & covox_a) + ("00000000" & covox_b);
-audio_r <= (others => '0') when loader_act = '1' else ("00000000" & port_xxfe_reg(4) & "0000000") + ("00000000" & ssg_cn0_c) + ("00000000" & ssg_cn0_b) + ("00000000" & ssg_cn1_c) + ("00000000" & ssg_cn1_b) + ("00000000" & covox_c) + ("00000000" & covox_d);
+audio_l <= "0000000000000000" when loader_act = '1' else ("000" & port_xxfe_reg(4) & "000000000000") + ("000" & ssg_cn0_a & "00000") + ("000" & ssg_cn0_b & "00000") + ("000" & ssg_cn1_a & "00000") + ("000" & ssg_cn1_b & "00000") + ("000" & covox_a   & "00000") + ("000" & covox_b   & "00000") + ("000" & saa_out_l & "00000");
+audio_r <= "0000000000000000" when loader_act = '1' else ("000" & port_xxfe_reg(4) & "000000000000") + ("000" & ssg_cn0_c & "00000") + ("000" & ssg_cn0_b & "00000") + ("000" & ssg_cn1_c & "00000") + ("000" & ssg_cn1_b & "00000") + ("000" & covox_c   & "00000") + ("000" & covox_d   & "00000") + ("000" & saa_out_r & "00000");
 
--- Convert signed audio data (range 127 to -128) to simple unsigned value.
-dac_s_l <= std_logic_vector(unsigned(audio_l + 2048));
-dac_s_r <= std_logic_vector(unsigned(audio_r + 2048));
+-- SAA1099
+saa_wr_n <= '0' when (cpu0_iorq_n = '0' and cpu0_wr_n = '0' and cpu0_a_bus(7 downto 0) = "11111111" and dos_act = '0') else '1';
 
 -------------------------------------------------------------------------------
 -- Port I/O
@@ -743,7 +848,7 @@ begin
 		when "01111" => cpu0_di_bus <= ssg_cn1_bus;
 		when "10100" => cpu0_di_bus <= port_7ffd_reg;
 		when "10101" => cpu0_di_bus <= port_dffd_reg;
-		when "10110" => cpu0_di_bus <= vid_attr;
+		when "10110" => cpu0_di_bus <= port_1ffd_reg;
 		when "10111" => cpu0_di_bus <= port_eff7_reg;
 		when others  => cpu0_di_bus <= (others => '1');
 	end case;
@@ -751,16 +856,16 @@ end process;
 
 selector <= 
 			"00010" when (cpu0_mreq_n = '0' and cpu0_rd_n = '0') else 																									-- SDRAM
-			"00110" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and port_bff7 = '1' and port_eff7_reg(7) = '1') else 									-- MC146818A
-			"00111" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_a_bus( 7 downto 0) = X"FE") else 													-- Keyboard, port #FE
-			"01000" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_a_bus( 7 downto 6) = "01" and cpu0_a_bus(4 downto 0) = "10111") else 	-- Z-Controller
---			"01101" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_a_bus( 7 downto 0) = X"1F" and dos_act = '0') else 							-- Joystick, port #1F
---			"01110" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_a_bus(15 downto 0) = X"FFFD" and ssg_sel = '0') else 						-- TurboSound
---			"01111" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_a_bus(15 downto 0) = X"FFFD" and ssg_sel = '1') else
-			"10100" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_a_bus(15 downto 0) = X"7FFD") else													-- port #7FFD
-			"10101" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_a_bus(15 downto 0) = X"DFFD") else													-- port #DFFD
---			"10110" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_a_bus( 7 downto 0) = X"FF") else													-- attributes #FF
-			"10111" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_a_bus(15 downto 0) = X"EFF7") else													-- port #EFF7
+			"00110" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_m1_n = '1' and port_bff7 = '1' and port_eff7_reg(7) = '1') else 									-- MC146818A
+			"00111" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_m1_n = '1' and cpu0_a_bus( 7 downto 0) = X"FE") else 													-- Keyboard, port #FE
+			"01000" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_m1_n = '1' and cpu0_a_bus( 7 downto 6) = "01" and cpu0_a_bus(4 downto 0) = "10111") else 	-- Z-Controller
+			"01101" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_m1_n = '1' and cpu0_a_bus( 7 downto 0) = X"1F" and dos_act = '0') else 							-- Joystick, port #1F
+			"01110" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_m1_n = '1' and cpu0_a_bus(15 downto 0) = X"FFFD" and ssg_sel = '0' and fd_port = '1') else -- TurboSound
+			"01111" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_m1_n = '1' and cpu0_a_bus(15 downto 0) = X"FFFD" and ssg_sel = '1' and fd_port = '1') else
+			"10100" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_m1_n = '1' and cpu0_a_bus(15 downto 0) = X"7FFD") else													-- port #7FFD
+			"10101" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_m1_n = '1' and cpu0_a_bus(15 downto 0) = X"DFFD" and fd_port = '1') else							-- port #DFFD
+			"10110" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_m1_n = '1' and cpu0_a_bus( 7 downto 0) = X"1FFD" and fd_port = '1') else							-- port #1FFD
+			"10111" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_m1_n = '1' and cpu0_a_bus(15 downto 0) = X"EFF7") else													-- port #EFF7
 			(others => '1');
 
 -------------------------------------------------------------------------------
