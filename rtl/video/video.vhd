@@ -13,6 +13,7 @@ entity video is
 		ENA		: in std_logic;							-- 7MHz ticks
 		BORDER	: in std_logic_vector(2 downto 0);	-- цвет бордюра (порт #xxFE)
 		DI			: in std_logic_vector(7 downto 0);	-- видеоданные
+		TURBO 	: in std_logic := '0';
 		
 		INT		: out std_logic;
 		ATTR_O	: out std_logic_vector(7 downto 0);
@@ -100,6 +101,7 @@ begin
 				end if;
 			
 				-- int
+				-- TODO: turbo 3.5/7 
 				if chr_col_cnt = 6 and hor_cnt(2 downto 0) = "111" then
 					if ver_cnt = 29 and chr_row_cnt = 7 and hor_cnt(5 downto 3) = "100" then
 						INT <= '0';
