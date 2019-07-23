@@ -132,7 +132,7 @@ generic map (
 	IOWait		=> 1 )	-- 0 => Single cycle I/O, 1 => Std I/O cycle
 
 port map (
-	RESET_n		=> not RESET,
+	RESET_n		=> cpu0_reset_n,
 	CLK_n		=> CLK,
 	ENA		=> cpuclk,
 	WAIT_n		=> '1',--cpu_wait_n,
@@ -206,7 +206,7 @@ port map (
 	MISO		=> spi_so);
 	
 -- ENC424J600 <> MP25P16
-process (port_0001_reg, loader_act, spi_si, spi_so, spi_clk, spi_cs_n)
+process (port_0001_reg, loader_act, spi_si, spi_so, spi_clk, spi_cs_n, DATA0)
 begin
 	if port_0001_reg(0) = '1' or loader_act = '0' then
 		NCSO <= '1';
@@ -299,7 +299,7 @@ end process;
 -- Селектор
 mux <= '0' & cpu0_a_bus(15 downto 13);
 
-process (mux, port_7ffd_reg, port_dffd_reg, port_0000_reg, cpu0_a_bus)
+process (mux, port_7ffd_reg, port_dffd_reg, port_0000_reg, cpu0_a_bus, port_1ffd_reg)
 begin
 	case mux is
 		when "0000" => ram_a_bus <= "100001000" & (not(port_1ffd_reg(1))) & (port_7ffd_reg(4) and not(port_1ffd_reg(1))) & '0';	-- Seg0 ROM 0000-1FFF
