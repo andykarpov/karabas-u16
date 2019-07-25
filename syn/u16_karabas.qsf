@@ -192,15 +192,7 @@ set_global_assignment -name VHDL_FILE ../rtl/t80se/T80_Pack.vhd
 set_global_assignment -name VHDL_FILE ../rtl/t80se/T80_MCode.vhd
 set_global_assignment -name VHDL_FILE ../rtl/t80se/T80_ALU.vhd
 set_global_assignment -name VHDL_FILE ../rtl/t80se/T80.vhd
-set_global_assignment -name VHDL_FILE ../rtl/loader/loader_video.vhd
 set_global_assignment -name VHDL_FILE ../rtl/loader/loader_spi.vhd
-set_global_assignment -name VHDL_FILE ../rtl/loader/loader_scan_convert.vhd
-set_global_assignment -name VHDL_FILE ../rtl/loader/loader_rom.vhd
-set_global_assignment -name QIP_FILE ../rtl/loader/loader_rom.qip
-set_global_assignment -name VHDL_FILE ../rtl/loader/loader_ram_scan.vhd
-set_global_assignment -name QIP_FILE ../rtl/loader/loader_ram_scan.qip
-set_global_assignment -name VHDL_FILE ../rtl/loader/loader_ram.vhd
-set_global_assignment -name QIP_FILE ../rtl/loader/loader_ram.qip
 set_global_assignment -name VHDL_FILE ../rtl/loader/loader.vhd
 set_global_assignment -name VHDL_FILE ../rtl/hid/receiver.vhd
 set_global_assignment -name VHDL_FILE ../rtl/hid/deserializer.vhd
