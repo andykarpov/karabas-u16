@@ -666,7 +666,7 @@ cpu0_nmi_n <= not kb_f_bus(5);				-- NMI
 --cpuclk <= clk_bus and cpu0_ena when mc146818_busy = '0' else '0';
 cpu0_wait_n <= not mc146818_busy; -- WAIT
 cpuclk <= clk_bus and cpu0_ena;
-cpu0_mult <= '0' & port_1ffd_reg(2); -- turbo switch
+cpu0_mult <= "01"; -- disabled turbo --'0' & port_1ffd_reg(2); -- turbo switch
 process (cpu0_mult, ena_3_5mhz, ena_7mhz, ena_14mhz)
 begin
 	case cpu0_mult is
@@ -721,7 +721,7 @@ SD_SI 	<= zc_mosi;
 --	end if;
 --end process;
 
-ram_ext_lock <= '1' when (port_1ffd_reg(1) = '1' and port_7ffd_reg(5) = '1') else '0';
+ram_ext_lock <= '0'; --port_7ffd_reg(5); --'1' when (port_1ffd_reg(1) = '1' and port_7ffd_reg(5) = '1') else '0';
 cs_xxfe <= '1' when cpu0_iorq_n = '0' and cpu0_m1_n = '1' and cpu0_a_bus(0) = '0' else '0';
 cs_xxff <= '1' when cpu0_iorq_n = '0' and cpu0_m1_n = '1' and cpu0_a_bus(7 downto 0) = X"FF" else '0';
 cs_eff7 <= '1' when cpu0_iorq_n = '0' and cpu0_m1_n = '1' and cpu0_a_bus = X"EFF7" else '0';
@@ -733,12 +733,10 @@ cs_xxfd <= '1' when cpu0_iorq_n = '0' and cpu0_m1_n = '1' and cpu0_a_bus(15) = '
 
 process (reset, areset, clk_bus, cpu0_a_bus, dos_act, cs_xxfe, cs_eff7, cs_dff7, cs_7ffd, cs_1ffd, cs_xxfd, port_7ffd_reg, port_1ffd_reg, cpu0_mreq_n, cpu0_m1_n, cpu0_wr_n, cpu0_do_bus, fd_port)
 begin
-	if areset = '1' then 
-		port_1ffd_reg <= (others => '0');
-	elsif reset = '1' then
+	if reset = '1' then
 		port_eff7_reg <= (others => '0');
 		port_7ffd_reg <= (others => '0');
-		port_1ffd_reg(7 downto 2) <= (others => '0'); -- skip turbo / memlock bits on reset
+		port_1ffd_reg <= (others => '0');--(7 downto 2) <= (others => '0'); -- skip turbo / memlock bits on reset
 		dos_act <= '1';
 	elsif clk_bus'event and clk_bus = '1' then
 
@@ -781,7 +779,7 @@ end process;
 -- RAM mux / ext
 
 mux <= '0' & cpu0_a_bus(15 downto 13);
-ram_ext <= "00000" & port_1ffd_reg(7) & port_7ffd_reg(7) & port_1ffd_reg(4) when port_1ffd_reg(1) = '0' else "00000000";
+ram_ext <= "00000" & port_1ffd_reg(7) & port_7ffd_reg(7) & port_1ffd_reg(4);-- when port_1ffd_reg(1) = '0' else "00000000";
 
 process (mux, port_7ffd_reg, cpu0_a_bus, dos_act, ram_ext)
 begin

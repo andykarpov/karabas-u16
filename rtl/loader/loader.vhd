@@ -1,6 +1,18 @@
--------------------------------------------------------------------[18.07.2019]
+-------------------------------------------------------------------[25.07.2019]
 -- u16-Loader
 -- DEVBOARD ReVerSE-U16
+--
+-- Load data from SPI flash (W25Q16) into RAM on boot
+-- 1. Loader process initiates by RESET=1 (asynchronous)
+-- 2. Loader progress indicates via LOADER_ACTIVE=1
+-- 3. At the end, a LOADER_RESET=1 pulse will be triggered to re-boot the host
+--
+-- Copyright (c) 2019 Andy Karpov <andy.karpov@gmail.com>
+--
+-- Datasheets:
+-- 	https://www.winbond.com/resource-files/w25q16dv_revi_nov1714_web.pdf
+--		https://www.digikey.com/eewiki/pages/viewpage.action?pageId=4096096
+-------------------------------------------------------------------------------
 
 LIBRARY ieee;
 USE ieee.std_logic_1164.all;
@@ -9,44 +21,44 @@ USE ieee.std_logic_unsigned.all;
 
 entity loader is
 generic (
-	FLASH_ADDR_START: std_logic_vector(23 downto 0) := "000010111000000000000000"; -- 753664; -- 24bit address
-	RAM_ADDR_START: std_logic_vector(24 downto 0)  := "1000010000000000000000000"; -- 25 bit address
-	SIZE_TO_READ: integer := 65536; -- count of bytes to read
+	FLASH_ADDR_START	: std_logic_vector(23 downto 0) := "000010111000000000000000"; -- 753664; -- 24bit address
+	RAM_ADDR_START		: std_logic_vector(24 downto 0) := "1000010000000000000000000"; -- 25 bit address
+	SIZE_TO_READ		: integer := 65536; -- count of bytes to read
 	
 	SPI_CMD_READ  		: std_logic_vector(7 downto 0) := X"03"; -- W25Q16 read command
 	SPI_CMD_POWERON 	: std_logic_vector(7 downto 0) := X"AB" -- W25Q16 power on command
 );
 port (
-	-- clocks
-	CLK   : in std_logic;
+	-- bus clock 28 MHz
+	CLK   			: in std_logic;
 	
 	-- global reset
-	RESET : in std_logic;
+	RESET 			: in std_logic;
 	
 	-- RAM interface
-	RAM_A 	: out std_logic_vector(24 downto 0);
-	RAM_DI 	: out std_logic_vector(7 downto 0);
-	RAM_DO 	: in std_logic_vector(7 downto 0);
-	RAM_WR	: out std_logic;
-	RAM_RD	: out std_logic;
-	RAM_RFSH	: out std_logic;
+	RAM_A 			: out std_logic_vector(24 downto 0);
+	RAM_DI 			: out std_logic_vector(7 downto 0);
+	RAM_DO 			: in std_logic_vector(7 downto 0);
+	RAM_WR			: out std_logic;
+	RAM_RD			: out std_logic;
+	RAM_RFSH			: out std_logic;
 
 	-- SPI FLASH (M25P16)
-	DATA0		: in std_logic;
-	NCSO		: out std_logic;
-	DCLK		: out std_logic;
-	ASDO		: out std_logic;
+	DATA0				: in std_logic;
+	NCSO				: out std_logic;
+	DCLK				: out std_logic;
+	ASDO				: out std_logic;
 
 	-- loader state pulses
-	LOADER_ACTIVE : out std_logic;
-	LOADER_RESET : out std_logic
+	LOADER_ACTIVE 	: out std_logic;
+	LOADER_RESET 	: out std_logic
 );
 end loader;
 
 architecture rtl of loader is
 
 -- SPI
-signal spi_page_bus 		: std_logic_vector(15 downto 0);
+signal spi_page_bus 	: std_logic_vector(15 downto 0);
 signal spi_a_bus 		: std_logic_vector(7 downto 0);
 signal spi_di_bus		: std_logic_vector(39 downto 0);
 signal spi_do_bus		: std_logic_vector(39 downto 0);
@@ -59,28 +71,28 @@ signal spi_clk			: std_logic;
 signal spi_ss_n 		: std_logic_vector(0 downto 0);
 
 -- SDRAM
-signal sdr_a_bus : std_logic_vector(24 downto 0);
-signal sdr_di_bus	: std_logic_vector(7 downto 0);
-signal sdr_do_bus	: std_logic_vector(7 downto 0);
-signal sdr_wr		: std_logic;
-signal sdr_rd		: std_logic;
+signal sdr_a_bus 		: std_logic_vector(24 downto 0);
+signal sdr_di_bus		: std_logic_vector(7 downto 0);
+signal sdr_do_bus		: std_logic_vector(7 downto 0);
+signal sdr_wr			: std_logic;
+signal sdr_rd			: std_logic;
 signal sdr_rfsh		: std_logic;
 
 -- System
-signal loader_act : std_logic := '1';
-signal reset_cnt  : std_logic_vector(3 downto 0) := "0000";
-signal read_cnt 	: std_logic_vector(16 downto 0) := (others => '0');
+signal loader_act 	: std_logic := '1';
+signal reset_cnt  	: std_logic_vector(3 downto 0) := "0000";
+signal read_cnt 		: std_logic_vector(16 downto 0) := (others => '0');
 
 type machine IS(init, release_init, wait_init, ready, cmd_read, cmd_end_read, do_read, do_next, finish);     --state machine datatype
-signal state : machine;                       --current state
+signal state 			: machine; --current state
 
 begin
 	
 -- SPI FLASH 25MHz 
 U1: entity work.loader_spi
 generic map (
-	slaves => 1,
-	d_width => 40
+	slaves 	=> 1,
+	d_width 	=> 40
 )
 port map (
 	clock 	=> CLK, 
@@ -136,10 +148,10 @@ begin
 		
 		case state is 
 			when init => -- power on command
-				spi_ena <='1';
+				spi_ena <='1'; -- spi ena pulse
 				spi_di_bus <= spi_cmd_poweron & "0000000000000000" & "00000000" & "00000000";
 				state <= release_init;
-			when release_init => -- end ena pulse
+			when release_init => -- end spi ena pulse
 				spi_ena <='0';
 				state <= wait_init;
 			when wait_init => -- wait for power on command complete
@@ -181,7 +193,7 @@ begin
 				state <= ready;
 			when finish => -- read all the required data from SPI flash
 				state <= finish; -- infinite loop here
-				loader_act <= '0';
+				loader_act <= '0'; -- loader finished
 		end case;
 	
 	end if;
