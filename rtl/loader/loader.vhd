@@ -2,20 +2,23 @@
 -- u16-Loader
 -- DEVBOARD ReVerSE-U16
 
-library IEEE; 
-use IEEE.std_logic_1164.all; 
-use IEEE.std_logic_unsigned.all;
-use IEEE.numeric_std.all; 
+LIBRARY ieee;
+USE ieee.std_logic_1164.all;
+USE ieee.std_logic_arith.all;
+USE ieee.std_logic_unsigned.all;
 
 entity loader is
+generic (
+	FLASH_ADDR_START: std_logic_vector(23 downto 0) := "000010111000000000000000"; -- 753664; -- 24bit address
+	RAM_ADDR_START: std_logic_vector(24 downto 0)  := "1000010000000000000000000"; -- 25 bit address
+	SIZE_TO_READ: integer := 65536; -- count of bytes to read
+	
+	SPI_CMD_READ  		: std_logic_vector(7 downto 0) := X"03"; -- W25Q16 read command
+	SPI_CMD_POWERON 	: std_logic_vector(7 downto 0) := X"AB" -- W25Q16 power on command
+);
 port (
 	-- clocks
-	CLK   : in std_logic;	
-	CLK14 : in std_logic;
-	CLK7  : in std_logic;
-	ENA7 	: in std_logic;
-	ENA14 : in std_logic;
-	ENA3_5 : in std_logic;
+	CLK   : in std_logic;
 	
 	-- global reset
 	RESET : in std_logic;
@@ -34,14 +37,6 @@ port (
 	DCLK		: out std_logic;
 	ASDO		: out std_logic;
 
-	-- VGA output
-	VGA_R		: out std_logic_vector(1 downto 0);
-	VGA_G		: out std_logic_vector(1 downto 0);
-	VGA_B		: out std_logic_vector(1 downto 0);
-	VGA_HS		: out std_logic;
-	VGA_VS		: out std_logic;
-	VGA_BLANK : out std_logic;
-
 	-- loader state pulses
 	LOADER_ACTIVE : out std_logic;
 	LOADER_RESET : out std_logic
@@ -50,343 +45,163 @@ end loader;
 
 architecture rtl of loader is
 
--- CPU0
-signal cpu0_reset_n	: std_logic;
-signal cpu0_clk		: std_logic;
-signal cpu0_a_bus	: std_logic_vector(15 downto 0);
-signal cpu0_do_bus	: std_logic_vector(7 downto 0);
-signal cpu0_di_bus	: std_logic_vector(7 downto 0);
-signal cpu0_mreq_n	: std_logic;
-signal cpu0_iorq_n	: std_logic;
-signal cpu0_wr_n	: std_logic;
-signal cpu0_rd_n	: std_logic;
-signal cpu0_int_n	: std_logic;
-signal cpu0_inta_n	: std_logic;
-signal cpu0_m1_n	: std_logic;
-signal cpu0_rfsh_n	: std_logic;
-signal cpu0_ena		: std_logic;
-signal cpu0_mult	: std_logic_vector(1 downto 0);
-signal cpu0_mem_wr	: std_logic;
-signal cpu0_mem_rd	: std_logic;
-signal cpu0_nmi_n	: std_logic;
--- Memory
-signal rom_do_bus	: std_logic_vector(7 downto 0);
-signal ram_a_bus	: std_logic_vector(11 downto 0);
--- Port
-signal port_xxfe_reg : std_logic_vector(7 downto 0) := "00000000";
-signal port_1ffd_reg	: std_logic_vector(7 downto 0);
-signal port_7ffd_reg	: std_logic_vector(7 downto 0);
-signal port_dffd_reg	: std_logic_vector(7 downto 0);
-signal port_eff7_reg	: std_logic_vector(7 downto 0);
-signal port_0000_reg	: std_logic_vector(7 downto 0) := "00000000";
-signal port_0001_reg	: std_logic_vector(7 downto 0) := "00000000";
--- Video
-signal vid_a_bus	: std_logic_vector(12 downto 0);
-signal vid_di_bus	: std_logic_vector(7 downto 0);
-signal vid_wr		: std_logic;
-signal vid_scr		: std_logic;
-signal vid_hsync	: std_logic;
-signal vid_vsync	: std_logic;
-signal vid_hcnt		: std_logic_vector(8 downto 0);
-signal vid_int		: std_logic;
-signal rgb		: std_logic_vector(5 downto 0);
-signal vga_hsync	: std_logic;
-signal vga_vsync	: std_logic;
-signal vga_sblank	: std_logic;
-signal VideoR		: std_logic_vector(1 downto 0);
-signal VideoG		: std_logic_vector(1 downto 0);
-signal VideoB		: std_logic_vector(1 downto 0);
-signal Hsync		: std_logic;
-signal Vsync		: std_logic;
-signal Sblank		: std_logic;
 -- SPI
-signal spi_wr		: std_logic;
-signal spi_do_bus	: std_logic_vector(7 downto 0);
+signal spi_page_bus 		: std_logic_vector(15 downto 0);
+signal spi_a_bus 		: std_logic_vector(7 downto 0);
+signal spi_di_bus		: std_logic_vector(39 downto 0);
+signal spi_do_bus		: std_logic_vector(39 downto 0);
 signal spi_busy		: std_logic;
-signal spi_si		: std_logic;
-signal spi_so		: std_logic;
-signal spi_clk		: std_logic;
-signal spi_cs_n		: std_logic;
+signal spi_ena 		: std_logic;
+signal spi_continue  : std_logic;
+signal spi_si			: std_logic;
+signal spi_so			: std_logic;
+signal spi_clk			: std_logic;
+signal spi_ss_n 		: std_logic_vector(0 downto 0);
+
 -- SDRAM
+signal sdr_a_bus : std_logic_vector(24 downto 0);
+signal sdr_di_bus	: std_logic_vector(7 downto 0);
 signal sdr_do_bus	: std_logic_vector(7 downto 0);
 signal sdr_wr		: std_logic;
 signal sdr_rd		: std_logic;
 signal sdr_rfsh		: std_logic;
--- System
-signal cpuclk		: std_logic;
-signal selector		: std_logic_vector(4 downto 0);
-signal loader_act 	: std_logic := '1';
-signal loader_act_reg : std_logic := '1';
-signal kb_do_bus	: std_logic_vector(4 downto 0) := "11111";
-signal mux		: std_logic_vector(3 downto 0);
 
+-- System
+signal loader_act : std_logic := '1';
 signal reset_cnt  : std_logic_vector(3 downto 0) := "0000";
+signal read_cnt 	: std_logic_vector(16 downto 0) := (others => '0');
+
+type machine IS(init, release_init, wait_init, ready, cmd_read, cmd_end_read, do_read, do_next, finish);     --state machine datatype
+signal state : machine;                       --current state
 
 begin
-	
--- Zilog Z80A CPU
-U1: entity work.T80se
-generic map (
-	Mode		=> 0,	-- 0 => Z80, 1 => Fast Z80, 2 => 8080, 3 => GB
-	T2Write		=> 1,	-- 0 => WR_n active in T3, /=0 => WR_n active in T2
-	IOWait		=> 1 )	-- 0 => Single cycle I/O, 1 => Std I/O cycle
-
-port map (
-	RESET_n		=> cpu0_reset_n,
-	CLK_n		=> CLK,
-	ENA		=> cpuclk,
-	WAIT_n		=> '1',--cpu_wait_n,
-	INT_n		=> cpu0_int_n,
-	NMI_n		=> cpu0_nmi_n,
-	BUSRQ_n		=> '1',
-	M1_n		=> cpu0_m1_n,
-	MREQ_n		=> cpu0_mreq_n,
-	IORQ_n		=> cpu0_iorq_n,
-	RD_n		=> cpu0_rd_n,
-	WR_n		=> cpu0_wr_n,
-	RFSH_n		=> cpu0_rfsh_n,
-	HALT_n		=> open,--cpu_halt_n,
-	BUSAK_n		=> open,--cpu_basak_n,
-	A		=> cpu0_a_bus,
-	DI		=> cpu0_di_bus,
-	DO		=> cpu0_do_bus);
-	
--- Video Spectrum/Pentagon
-U2: entity work.loader_video
-port map (
-	CLK		=> CLK,
-	ENA		=> ENA7,
-	INT		=> cpu0_int_n,
-	A			=> vid_a_bus,
-	DI			=> vid_di_bus,
-	BORDER 	=> port_xxfe_reg(2 downto 0),
-	RGB		=> rgb,
-	HSYNC		=> vid_hsync,
-	VSYNC		=> vid_vsync,
-	BLANK 	=> open
-	);
-	
--- Video memory
-U3: entity work.loader_ram
-port map (
-	clock_a		=> CLK,
-	clock_b		=> CLK,
-	address_a	=> vid_scr & cpu0_a_bus(12 downto 0),
-	address_b	=> port_7ffd_reg(3) & vid_a_bus,
-	data_a		=> cpu0_do_bus,
-	data_b		=> "11111111",
-	q_a		=> open,
-	q_b		=> vid_di_bus,
-	wren_a		=> vid_wr,
-	wren_b		=> '0');
-
--- ROM 1K
-U6: entity work.loader_rom
-port map (
-	address => cpu0_a_bus(12 downto 0),
-	clock => CLK,
-	q => rom_do_bus
-);
 	
 -- SPI FLASH 25MHz 
-
-U8: entity work.loader_spi
+U1: entity work.loader_spi
+generic map (
+	slaves => 1,
+	d_width => 40
+)
 port map (
-	RESET		=> RESET,
-	CLK		=> CLK,
-	SCK		=> CLK14,
-	A		=> cpu0_a_bus(0),
-	DI		=> cpu0_do_bus,
-	DO		=> spi_do_bus,
-	WR		=> spi_wr,
-	BUSY		=> spi_busy,
-	CS_n		=> spi_cs_n,
-	SCLK		=> spi_clk,
-	MOSI		=> spi_si,
-	MISO		=> spi_so);
+	clock 	=> CLK, 
+	reset_n 	=> not(RESET),
+	enable 	=> spi_ena,
+	cpol		=> '0', -- spi mode 0
+	cpha 		=> '0',
+	cont 		=> spi_continue,
+	clk_div 	=> 2, -- CLK divider
+	addr 		=> 0,
+	tx_data 	=> spi_di_bus,
+	miso 		=> spi_so,
+	sclk 		=> spi_clk,
+	ss_n 		=> spi_ss_n,
+	mosi		=> spi_si,
+	busy 		=> spi_busy,
+	rx_data 	=> spi_do_bus
+);
 	
--- ENC424J600 <> MP25P16
-process (port_0001_reg, loader_act, spi_si, spi_so, spi_clk, spi_cs_n, DATA0)
-begin
-	if port_0001_reg(0) = '1' or loader_act = '0' then
-		NCSO <= '1';
-		spi_so <= '1';
-	else
-		NCSO <= spi_cs_n;
-		spi_so <= DATA0;
-	end if;
-end process;	
-	
+NCSO <= spi_ss_n(0) when loader_act = '1' else '1';
+spi_so <= DATA0;
 ASDO <= spi_si;
 DCLK <= spi_clk;
 	
 -------------------------------------------------------------------------------
 
-cpu0_reset_n <= not(RESET);	-- CPU сброс
-cpu0_inta_n <= cpu0_iorq_n or cpu0_m1_n;		-- INTA
-cpu0_nmi_n <= '1';				-- NMI
-cpu0_ena <= ENA3_5;
-cpuclk <= CLK and cpu0_ena;
-
--------------------------------------------------------------------------------
 -- RAM
-sdr_wr <= '1' when cpu0_mreq_n = '0' and cpu0_wr_n = '0' and (cpu0_a_bus(15 downto 14) /= "00") else '0';
-sdr_rd <= not (cpu0_mreq_n or cpu0_rd_n);
-sdr_rfsh <= not cpu0_rfsh_n;
+sdr_rd <= '0';
+sdr_rfsh <= '0';
 
-RAM_A <= ram_a_bus & cpu0_a_bus(12 downto 0);
-RAM_DI <= cpu0_do_bus;
+RAM_A <= sdr_a_bus;
+RAM_DI <= sdr_di_bus;
 sdr_do_bus <= RAM_DO;
 RAM_WR <= sdr_wr;
 RAM_RD <= sdr_rd;
 RAM_RFSH <= sdr_rfsh;
 
--------------------------------------------------------------------------------
--- Регистры
-process (RESET, CLK, cpu0_a_bus, port_0000_reg, cpu0_mreq_n, cpu0_iorq_n, cpu0_m1_n, cpu0_wr_n, cpu0_do_bus, port_0001_reg)
+-- loading state machine
+process (RESET, CLK, loader_act)
+VARIABLE spi_busy_cnt : INTEGER := 0;
 begin
 	if RESET = '1' then
-		port_0000_reg <= (others => '0');	-- маска по AND порта #DFFD
-		port_0001_reg <= (others => '0');	-- bit2 = (0:Loader ON, 1:Loader OFF); bit1 = (0:SRAM<->CPU0, 1:SRAM<->GS); bit0 = (0:M25P16, 1:ENC424J600)
 		loader_act <= '1';
+		spi_page_bus <= FLASH_ADDR_START(23 downto 8);
+		spi_a_bus <= FLASH_ADDR_START(7 downto 0);
+		sdr_a_bus <= RAM_ADDR_START;
+		spi_ena <= '0';
+		sdr_wr <= '0';
+		spi_continue <= '0';
+		state <= init;
+		read_cnt <= (others => '0');
 	elsif CLK'event and CLK = '1' then
-		if cpu0_iorq_n = '0' and cpu0_wr_n = '0' and cpu0_a_bus(15 downto 0) = X"0000" then port_0000_reg <= cpu0_do_bus; end if;
-		if cpu0_iorq_n = '0' and cpu0_wr_n = '0' and cpu0_a_bus(15 downto 0) = X"0001" then port_0001_reg <= cpu0_do_bus; end if;
-		if cpu0_m1_n = '0' and cpu0_mreq_n = '0' and cpu0_a_bus = X"0000" and port_0001_reg(2) = '1' then loader_act <= '0'; end if;
+		
+		case state is 
+			when init => -- power on command
+				spi_ena <='1';
+				spi_di_bus <= spi_cmd_poweron & "0000000000000000" & "00000000" & "00000000";
+				state <= release_init;
+			when release_init => -- end ena pulse
+				spi_ena <='0';
+				state <= wait_init;
+			when wait_init => -- wait for power on command complete
+				if (spi_busy = '0') then 
+					state <= ready;
+				else 
+					state <= wait_init;
+				end if;
+			when ready => -- ready to begin / finish
+				spi_ena <= '0';
+				if (read_cnt < SIZE_TO_READ) then 
+					state <= cmd_read;
+				else 
+					state <= finish;
+				end if;
+			when cmd_read => -- read command
+				spi_ena <= '1';
+				spi_di_bus <= spi_cmd_read & spi_page_bus & spi_a_bus & "00000000";
+				state <= cmd_end_read;
+			when cmd_end_read => -- end of read command
+				spi_ena <= '0';
+				state <= do_read;
+			when do_read => -- wait for spi transfer
+				if (spi_busy = '0') then 
+					sdr_wr <= '1'; -- begin ram write
+					sdr_di_bus <= spi_do_bus(7 downto 0); -- todo
+					state <= do_next;
+				else 
+					state <= do_read;
+				end if;
+			when do_next => -- increment address / page
+				sdr_wr <= '0'; -- end ram write
+				read_cnt <= read_cnt + 1; -- increment read counter
+				if (spi_a_bus = X"FF") then -- increment flash page
+					spi_page_bus <= spi_page_bus + 1;
+				end if;
+				spi_a_bus <= spi_a_bus + 1; -- increment flash address 
+				sdr_a_bus <= sdr_a_bus + 1; -- increment ram address
+				state <= ready;
+			when finish => -- read all the required data from SPI flash
+				state <= finish; -- infinite loop here
+				loader_act <= '0';
+		end case;
+	
 	end if;
 end process;
 
-process (RESET, CLK, loader_act, loader_act_reg)
-begin
-	if RESET = '1' then
-		loader_act_reg <= '1';
-	elsif CLK'event and CLK = '1' then
-		if (loader_act_reg = '1' and loader_act = '0') then 
-			loader_act_reg <= '0';
-		end if;
-	end if;
-end process;
-
-
-process (RESET, CLK, reset_cnt, loader_act_reg)
+-- reset signal at the end
+process (RESET, CLK, reset_cnt, loader_act)
 begin
 	if RESET = '1' then
 		reset_cnt <= "0000";
 	elsif CLK'event and CLK = '1' then
-		if (loader_act_reg = '0' and reset_cnt /= "1000") then 
+		if (loader_act = '0' and reset_cnt /= "1000") then 
 			reset_cnt <= reset_cnt + 1;
 		end if;
 	end if;
 end process;
 
-process (RESET, CLK, cpu0_a_bus, cpu0_iorq_n, port_7ffd_reg, port_dffd_reg, cpu0_wr_n, cpu0_do_bus)
-begin
-	if RESET = '1' then
-		port_eff7_reg <= (others => '0');
-		port_1ffd_reg <= (others => '0');
-		port_7ffd_reg <= (others => '0');
-		port_dffd_reg <= (others => '0');
-	elsif CLK'event and CLK = '1' then
-		if cpu0_iorq_n = '0' and cpu0_wr_n = '0' and cpu0_a_bus(7 downto 0) = X"FE" then port_xxfe_reg <= cpu0_do_bus; end if;
-		if cpu0_iorq_n = '0' and cpu0_wr_n = '0' and cpu0_a_bus = X"EFF7" then port_eff7_reg <= cpu0_do_bus; end if;
-		if cpu0_iorq_n = '0' and cpu0_wr_n = '0' and cpu0_a_bus = X"1FFD" then port_1ffd_reg <= cpu0_do_bus; end if;
-		if cpu0_iorq_n = '0' and cpu0_wr_n = '0' and cpu0_a_bus = X"7FFD" and port_7ffd_reg(5) = '0' then port_7ffd_reg <= cpu0_do_bus; end if;
-		if cpu0_iorq_n = '0' and cpu0_wr_n = '0' and cpu0_a_bus = X"DFFD" and port_7ffd_reg(5) = '0' then port_dffd_reg <= cpu0_do_bus; end if;
-	end if;
-end process;
-
-------------------------------------------------------------------------------
--- Селектор
-mux <= '0' & cpu0_a_bus(15 downto 13);
-
-process (mux, port_7ffd_reg, port_dffd_reg, port_0000_reg, cpu0_a_bus, port_1ffd_reg)
-begin
-	case mux is
-		when "0000" => ram_a_bus <= "100001000" & (not(port_1ffd_reg(1))) & (port_7ffd_reg(4) and not(port_1ffd_reg(1))) & '0';	-- Seg0 ROM 0000-1FFF
-		when "0001" => ram_a_bus <= "100001000" & (not(port_1ffd_reg(1))) & (port_7ffd_reg(4) and not(port_1ffd_reg(1))) & '1';	-- Seg0 ROM 2000-3FFF	
-		when "0010" => ram_a_bus <= "000000001010";	-- Seg1 RAM 4000-5FFF
-		when "0011" => ram_a_bus <= "000000001011";	-- Seg1 RAM 6000-7FFF
-		when "0100" => ram_a_bus <= "000000000100";	-- Seg2 RAM 8000-9FFF
-		when "0101" => ram_a_bus <= "000000000101";	-- Seg2 RAM A000-BFFF
-		when "0110" => ram_a_bus <= (port_dffd_reg and port_0000_reg) & port_7ffd_reg(2 downto 0) & '0';	-- Seg3 RAM C000-DFFF
-		when "0111" => ram_a_bus <= (port_dffd_reg and port_0000_reg) & port_7ffd_reg(2 downto 0) & '1';	-- Seg3 RAM E000-FFFF
-		when others => null;
-	end case;
-end process;
-
 -------------------------------------------------------------------------------
--- Port I/O
-spi_wr 		<= '1' when (cpu0_iorq_n = '0' and cpu0_wr_n = '0' and cpu0_a_bus(7 downto 1) = "0000001") else '0';
 
--------------------------------------------------------------------------------
--- Шина данных CPU0
-process (selector, rom_do_bus, sdr_do_bus, spi_do_bus, spi_busy, port_7ffd_reg, port_dffd_reg)
-begin
-	case selector is
-		when "00000" => cpu0_di_bus <= rom_do_bus;
-		when "00010" => cpu0_di_bus <= sdr_do_bus;
-		when "00011" => cpu0_di_bus <= spi_do_bus;
-		when "00100" => cpu0_di_bus <= spi_busy & "1111111";
-		when "00111" => cpu0_di_bus <= "11111111";
-		when "10100" => cpu0_di_bus <= port_7ffd_reg;
-		when "10101" => cpu0_di_bus <= port_dffd_reg;		
-		when others  => cpu0_di_bus <= (others => '1');
-	end case;
-end process;
-
-selector <= 
-			"00000" when (cpu0_mreq_n = '0' and cpu0_rd_n = '0' and cpu0_a_bus(15 downto 14) = "00") else						-- Loader ROM 
-			"00010" when (cpu0_mreq_n = '0' and cpu0_rd_n = '0') else 																		-- SDRAM	
-			"00011" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_a_bus( 7 downto 0) = X"02") else 						-- M25P16
-			"00100" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_a_bus( 7 downto 0) = X"03") else 						-- M25P16
-			"00111" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_a_bus( 7 downto 0) = X"FE") else 						-- Клавиатура, порт xxFE						
-			"10100" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_a_bus(15 downto 0) = X"7FFD") else						-- port #7FFD
-			"10101" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_a_bus(15 downto 0) = X"DFFD") else						-- port #DFFD			
-			(others => '1');
-
--------------------------------------------------------------------------------
--- Video
-vid_wr	<= '1' when cpu0_mreq_n = '0' and cpu0_wr_n = '0' and ((ram_a_bus = "000000001010") or (ram_a_bus = "000000001110")) else '0'; 
-vid_scr	<= '1' when (ram_a_bus = "000000001110") else '0';
-
-U30 : entity work.loader_scan_convert
-generic map (
-	-- mark active area of input video
-	cstart      	=>  38,  -- composite sync start
-	clength     	=> 352,  -- composite sync length
-	-- output video timing
-	hA		=>  24,	-- h front porch
-	hB		=>  32,	-- h sync
-	hC		=>  40,	-- h back porch
-	hD		=> 352,	-- visible video
---	vA		=>   0,	-- v front porch (not used)
-	vB		=>   2,	-- v sync
-	vC		=>  10,	-- v back porch
-	vD		=> 284,	-- visible video
-	hpad		=>   0,	-- create H black border
-	vpad		=>   0	-- create V black border
-)
-port map (
-	I_VIDEO		=> rgb,
-	I_HSYNC		=> vid_hsync,
-	I_VSYNC		=> vid_vsync,
-	O_VIDEO(5 downto 4)	=> VideoR,
-	O_VIDEO(3 downto 2)	=> VideoG,
-	O_VIDEO(1 downto 0)	=> VideoB,
-	O_HSYNC		=> HSync,
-	O_VSYNC		=> VSync,
-	O_CMPBLK_N	=> sblank,
-	CLK		=> CLK7,
-	CLK_x2		=> CLK14);
-
-VGA_R <= VideoR;
-VGA_G <= VideoG;
-VGA_B <= VideoB;
-VGA_HS <= HSync;
-VGA_VS <= VSync;
-VGA_BLANK <= sblank;
-
-LOADER_ACTIVE <= loader_act_reg;
+LOADER_ACTIVE <= loader_act;
 LOADER_RESET <= reset_cnt(2);
 
 end rtl;
