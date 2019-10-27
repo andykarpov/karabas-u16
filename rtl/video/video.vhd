@@ -21,7 +21,9 @@ entity video is
 		BLANK		: out std_logic;						-- BLANK
 		RGB		: out std_logic_vector(5 downto 0);		-- RRGGBB
 		HSYNC		: out std_logic;
-		VSYNC		: out std_logic);
+		VSYNC		: out std_logic;
+		INVERT_O : out std_logic
+		);
 end entity;
 
 architecture rtl of video is
@@ -51,6 +53,8 @@ architecture rtl of video is
 	signal VIDEO_I 	: std_logic;	
 
 begin
+
+	INVERT_O <= invert(0);
 
 	-- sync, counters
 	process( CLK, ENA, chr_col_cnt, hor_cnt, chr_row_cnt, ver_cnt)

@@ -168,10 +168,21 @@ signal ram_a_bus	: std_logic_vector(11 downto 0);
 signal port_xxfe_reg	: std_logic_vector(7 downto 0) := "00000000";
 signal port_7ffd_reg	: std_logic_vector(7 downto 0);
 signal port_1ffd_reg	: std_logic_vector(7 downto 0);
+signal port_dffd_reg : std_logic_vector(7 downto 0);
+
 -- PS/2 Keyboard
 signal kb_do_bus	: std_logic_vector(4 downto 0);
-signal kb_f_bus		: std_logic_vector(12 downto 1);
-signal kb_joy_bus	: std_logic_vector(4 downto 0);
+signal kb_reset : std_logic := '0';
+
+-- Joy
+signal joy_bus : std_logic_vector(4 downto 0) := "11111";
+
+-- Mouse
+signal ms_x		: std_logic_vector(7 downto 0);
+signal ms_y		: std_logic_vector(7 downto 0);
+signal ms_z		: std_logic_vector(7 downto 0);
+signal ms_b		: std_logic_vector(7 downto 0);
+
 -- Video
 signal vid_a_bus	: std_logic_vector(12 downto 0);
 signal vid_di_bus	: std_logic_vector(7 downto 0);
@@ -184,6 +195,8 @@ signal vid_int		: std_logic;
 signal vid_attr	: std_logic_vector(7 downto 0);
 signal vid_rgb		: std_logic_vector(5 downto 0);
 signal vid_border : std_logic_vector(2 downto 0);
+signal vid_invert : std_logic;
+
 signal vga_hsync	: std_logic;
 signal vga_vsync	: std_logic;
 signal vga_blank	: std_logic;
@@ -222,6 +235,7 @@ signal cs_eff7 : std_logic := '0';
 signal cs_dff7 : std_logic := '0';
 signal cs_7ffd : std_logic := '0';
 signal cs_1ffd : std_logic := '0';
+signal cs_dffd : std_logic := '0';
 signal cs_fffd : std_logic := '0';
 signal cs_xxfd : std_logic := '0';
 
@@ -271,16 +285,12 @@ signal ena_cnt		: std_logic_vector(5 downto 0);
 -- System
 signal reset		: std_logic;
 signal areset		: std_logic;
-signal key_reset	: std_logic;
-signal key_global_reset: std_logic;
 signal locked		: std_logic;
 signal loader_act	: std_logic := '1';
 signal loader_reset : std_logic := '0';
 signal dos_act		: std_logic := '1';
 signal cpuclk		: std_logic;
 signal selector		: std_logic_vector(4 downto 0);
-signal key_f		: std_logic_vector(12 downto 1);
-signal key		: std_logic_vector(12 downto 1) := "000000000000";
 signal mux		: std_logic_vector(3 downto 0);
 signal ram_ext : std_logic_vector(7 downto 0) := "00000000";
 signal ram_ext_lock : std_logic := '0';
@@ -404,7 +414,9 @@ port map (
 	BLANK 			=> open,
 	RGB				=> vid_rgb,
 	HSYNC				=> vid_hsync,
-	VSYNC				=> vid_vsync);
+	VSYNC				=> vid_vsync,
+	INVERT_O 		=> vid_invert
+	);
 	
 -- Video memory
 U4: entity work.altram1
@@ -426,29 +438,19 @@ generic map (
 	divisor			=> 434)		-- divisor = 50MHz / 115200 Baud = 434
 port map(
 	I_CLK				=> CLK_50MHZ,
+	I_CLK_RATE 		=> vid_invert,
 	I_RESET			=> areset,
 	I_RX				=> USB_TX,
 	I_NEWFRAME		=> USB_IO1,
 	I_ADDR			=> cpu0_a_bus(15 downto 8),
-	O_MOUSE0_X		=> open, --ms_x_bus,
-	O_MOUSE0_Y		=> open, --ms_y_bus,
-	O_MOUSE0_Z		=> open, --ms_z_bus,
-	O_MOUSE0_BUTTONS	=> open, --ms_but_bus,
-	O_MOUSE1_X		=> open,
-	O_MOUSE1_Y		=> open,
-	O_MOUSE1_Z		=> open,
-	O_MOUSE1_BUTTONS	=> open,
-	O_KEY0			=> open,--kb_key0,
-	O_KEY1			=> open,--kb_key1,
-	O_KEY2			=> open,--kb_key2,
-	O_KEY3			=> open,--kb_key3,
-	O_KEY4			=> open,--kb_key4,
-	O_KEY5			=> open,--kb_key5,
-	O_KEY6			=> open,--kb_key6,
-	O_KEYBOARD_SCAN		=> kb_do_bus,
-	O_KEYBOARD_FKEYS		=> kb_f_bus,
-	O_KEYBOARD_JOYKEYS	=> kb_joy_bus,
-	O_KEYBOARD_CTLKEYS	=> open);	
+	O_KEYBOARD_DO_BUS		=> kb_do_bus,
+	O_MOUSE_X		=> ms_x,
+	O_MOUSE_Y		=> ms_y,
+	O_MOUSE_Z		=> ms_z,
+	O_MOUSE_BUTTONS => ms_b,
+	O_JOYSTICK 		=> joy_bus,
+	O_RESET 	=> kb_reset
+	);
 	
 -- Z-Controller
 U6: entity work.zcontroller
@@ -653,15 +655,12 @@ ena_3_5mhz <= ena_cnt(2) and ena_cnt(1) and ena_cnt(0);
 ena_1_75mhz <= ena_cnt(3) and ena_cnt(2) and ena_cnt(1) and ena_cnt(0);
 ena_0_4375mhz <= ena_cnt(5) and ena_cnt(4) and ena_cnt(3) and ena_cnt(2) and ena_cnt(1) and ena_cnt(0);
 
-areset <= not USB_NRESET or key_global_reset;					 -- global reset
-reset <= areset or key_reset or not(locked) or loader_reset or loader_act; -- hot reset
+areset <= not USB_NRESET;					 -- global reset
+reset <= areset or kb_reset or not(locked) or loader_reset or loader_act; -- hot reset
 
-key_reset <= kb_f_bus(3);
-key_global_reset <= kb_f_bus(2);
-
-cpu0_reset_n <= not(reset) and not(kb_f_bus(4)) and not(loader_reset);					-- CPU reset
+cpu0_reset_n <= not(reset) and not(loader_reset);					-- CPU reset
 cpu0_inta_n <= cpu0_iorq_n or cpu0_m1_n;	-- INTA
-cpu0_nmi_n <= not kb_f_bus(5);				-- NMI
+cpu0_nmi_n <= '1';				-- NMI
 --cpu0_wait_n <= '1';
 --cpuclk <= clk_bus and cpu0_ena when mc146818_busy = '0' else '0';
 cpu0_wait_n <= not mc146818_busy; -- WAIT
@@ -707,35 +706,37 @@ SD_SI 	<= zc_mosi;
 -- #FD port correction
 -- IN A, (#FD) - read a value from a hardware port 
 -- OUT (#FD), A - writes the value of the second operand into the port given by the first operand.
---fd_sel <= '0' when (
---	(cpu0_a_bus(15 downto 8) = "11111101" and cpu0_do_bus = X"FD") 
---	) 
---	else '1'; 
---
---process(fd_sel, reset)
---begin
---	if reset='1' then
---		fd_port <= '1';
---	else 
---		fd_port <= fd_sel;
---	end if;
---end process;
+fd_sel <= '0' when (
+	(cpu0_do_bus(7 downto 4) = "1101" and cpu0_do_bus(2 downto 0) = "011") or 
+	(cpu0_di_bus(7 downto 4) = "1101" and cpu0_di_bus(2 downto 0) = "011")) else '1'; 
 
-ram_ext_lock <= '0'; --port_7ffd_reg(5); --'1' when (port_1ffd_reg(1) = '1' and port_7ffd_reg(5) = '1') else '0';
+-- TODO
+process(fd_sel, reset, cpu0_m1_n)
+begin
+	if reset='1' then
+		fd_port <= '1';
+	elsif rising_edge(cpu0_m1_n) then 
+		fd_port <= fd_sel;
+	end if;
+end process;
+
+--ram_ext_lock <= port_7ffd_reg(5); --'1' when (port_1ffd_reg(1) = '1' and port_7ffd_reg(5) = '1') else '0';
 cs_xxfe <= '1' when cpu0_iorq_n = '0' and cpu0_m1_n = '1' and cpu0_a_bus(0) = '0' else '0';
 cs_xxff <= '1' when cpu0_iorq_n = '0' and cpu0_m1_n = '1' and cpu0_a_bus(7 downto 0) = X"FF" else '0';
 cs_eff7 <= '1' when cpu0_iorq_n = '0' and cpu0_m1_n = '1' and cpu0_a_bus = X"EFF7" else '0';
 cs_dff7 <= '1' when cpu0_iorq_n = '0' and cpu0_m1_n = '1' and cpu0_a_bus = X"DFF7" and port_eff7_reg(7) = '1' else '0';
-cs_fffd <= '1' when cpu0_iorq_n = '0' and cpu0_m1_n = '1' and cpu0_a_bus = X"FFFD" else '0';
-cs_1ffd <= '1' when cpu0_iorq_n = '0' and cpu0_m1_n = '1' and cpu0_a_bus = X"1FFD" else '0';
-cs_7ffd <= '1' when cpu0_iorq_n = '0' and cpu0_m1_n = '1' and cpu0_a_bus = X"7FFD" and ram_ext_lock = '0' else '0';
-cs_xxfd <= '1' when cpu0_iorq_n = '0' and cpu0_m1_n = '1' and cpu0_a_bus(15) = '0' and cpu0_a_bus(1) = '0' and ram_ext_lock = '0' else '0';
+cs_fffd <= '1' when cpu0_iorq_n = '0' and cpu0_m1_n = '1' and cpu0_a_bus = X"FFFD" and fd_port = '1' else '0';
+cs_1ffd <= '1' when cpu0_iorq_n = '0' and cpu0_m1_n = '1' and cpu0_a_bus = X"1FFD" and fd_port = '1' else '0';
+cs_dffd <= '1' when cpu0_iorq_n = '0' and cpu0_m1_n = '1' and cpu0_a_bus = X"DFFD" and fd_port = '1' else '0';
+cs_7ffd <= '1' when cpu0_iorq_n = '0' and cpu0_m1_n = '1' and cpu0_a_bus = X"7FFD" else '0';
+cs_xxfd <= '1' when cpu0_iorq_n = '0' and cpu0_m1_n = '1' and cpu0_a_bus(15) = '0' and cpu0_a_bus(1) = '0' and fd_port = '0' else '0';
 
 process (reset, areset, clk_bus, cpu0_a_bus, dos_act, cs_xxfe, cs_eff7, cs_dff7, cs_7ffd, cs_1ffd, cs_xxfd, port_7ffd_reg, port_1ffd_reg, cpu0_mreq_n, cpu0_m1_n, cpu0_wr_n, cpu0_do_bus, fd_port)
 begin
 	if reset = '1' then
 		port_eff7_reg <= (others => '0');
 		port_7ffd_reg <= (others => '0');
+		port_dffd_reg <= (others => '0');
 		port_1ffd_reg <= (others => '0');--(7 downto 2) <= (others => '0'); -- skip turbo / memlock bits on reset
 		dos_act <= '1';
 	elsif clk_bus'event and clk_bus = '1' then
@@ -749,6 +750,7 @@ begin
 		if cs_eff7 = '1' and cpu0_wr_n = '0' then 
 			port_eff7_reg <= cpu0_do_bus; 
 		end if;
+		
 		-- #DFF7
 		if cs_dff7 = '1' and cpu0_wr_n = '0' then 
 			mc146818_a_bus <= cpu0_do_bus(5 downto 0); 
@@ -756,17 +758,20 @@ begin
 
 		-- #1FFD
 		if cs_1ffd = '1' and cpu0_wr_n = '0' then
-			if (dos_act = '1') then -- skip turbo / memlock bits in dos mode
-				port_1ffd_reg(7 downto 2) <= cpu0_do_bus(7 downto 2);
-			else 
-				port_1ffd_reg <= cpu0_do_bus;
-			end if;
+			port_1ffd_reg <= cpu0_do_bus;
+		end if;
+
+		-- #DFFD
+		if cs_dffd = '1' and cpu0_wr_n = '0' then
+			port_dffd_reg <= cpu0_do_bus;
+		end if;
+		
 		-- #7FFD
-		elsif cs_7ffd = '1' and cpu0_wr_n = '0' then
+		if cs_7ffd = '1' and cpu0_wr_n = '0' then
 			port_7ffd_reg <= cpu0_do_bus;
 		-- #FD
 		elsif cs_xxfd = '1' and cpu0_wr_n = '0' then -- short #FD
-			port_7ffd_reg(4 downto 0) <= cpu0_do_bus(4 downto 0);
+			port_7ffd_reg <= cpu0_do_bus;
 		end if;
 		
 		-- TR-DOS FLAG
@@ -779,7 +784,7 @@ end process;
 -- RAM mux / ext
 
 mux <= '0' & cpu0_a_bus(15 downto 13);
-ram_ext <= "00000" & port_1ffd_reg(7) & port_7ffd_reg(7) & port_1ffd_reg(4);-- when port_1ffd_reg(1) = '0' else "00000000";
+ram_ext <= port_dffd_reg(2 downto 0) & port_7ffd_reg(5) & port_7ffd_reg(6) & port_7ffd_reg(7) & port_1ffd_reg(7) & port_1ffd_reg(4);-- when port_1ffd_reg(1) = '0' else "00000000";
 
 process (mux, port_7ffd_reg, cpu0_a_bus, dos_act, ram_ext)
 begin
@@ -817,35 +822,25 @@ zc_wr 		<= '1' when (cpu0_iorq_n = '0' and cpu0_wr_n = '0' and cpu0_a_bus(7 down
 zc_rd 		<= '1' when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_a_bus(7 downto 6) = "01" and cpu0_a_bus(4 downto 0) = "10111") else '0';
 
 -------------------------------------------------------------------------------
--- Functional keys
-
-process (clk_bus, key, kb_f_bus, key_f)
-begin
-	if (clk_bus'event and clk_bus = '1') then
-		key <= kb_f_bus;
-		if (kb_f_bus /= key) then
-			key_f <= key_f xor key;
-		end if;
-	end if;
-end process;
-
--------------------------------------------------------------------------------
 -- CPU0 Data bus
 
-process (selector, host_ram_do, mc146818_do_bus, kb_do_bus, zc_do_bus, kb_joy_bus, ssg_cn0_bus, ssg_cn1_bus, port_7ffd_reg, vid_attr, port_eff7_reg)
+process (selector, host_ram_do, mc146818_do_bus, kb_do_bus, zc_do_bus, ssg_cn0_bus, ssg_cn1_bus, port_7ffd_reg, vid_attr, port_eff7_reg)
 begin
 	case selector is
 		when "00010" => cpu0_di_bus <= host_ram_do;
 		when "00110" => cpu0_di_bus <= mc146818_do_bus;
 		when "00111" => cpu0_di_bus <= "111" & kb_do_bus;
 		when "01000" => cpu0_di_bus <= zc_do_bus;
-		when "01101" => cpu0_di_bus <= "000" & kb_joy_bus;
+		when "01101" => cpu0_di_bus <= "000" & joy_bus;
 		when "01110" => cpu0_di_bus <= ssg_cn0_bus;
 		when "01111" => cpu0_di_bus <= ssg_cn1_bus;
 		when "10001" => cpu0_di_bus <= port_1ffd_reg;
 		when "10100" => cpu0_di_bus <= port_7ffd_reg;
-		when "11000" => cpu0_di_bus <= port_7ffd_reg;
---		when "11001" => cpu0_di_bus <= vid_attr;
+--		when "11000" => cpu0_di_bus <= port_7ffd_reg;
+		when "11010" => cpu0_di_bus <= ms_z(3 downto 0) & '1' & not ms_b(2) & not ms_b(0) & not ms_b(1);
+		when "11011" => cpu0_di_bus <= ms_x;
+		when "11100" => cpu0_di_bus <= not(ms_y);
+		when "11101" => cpu0_di_bus <= vid_attr;
 		when others  => cpu0_di_bus <= (others => '1');
 	end case;
 end process;
@@ -860,8 +855,11 @@ selector <=
 			"01111" when (cs_fffd = '1' and cpu0_rd_n = '0' and ssg_sel = '1') else
 			"10001" when (cs_1ffd = '1' and cpu0_rd_n = '0') else										-- port #1FFD
 			"10100" when (cs_7ffd = '1' and cpu0_rd_n = '0') else										-- port #7FFD
-			"11000" when (cs_xxfd = '1' and cpu0_rd_n = '0') else 									-- port #FD
---			"11001" when (cs_xxff = '1' and cpu0_rd_n = '0') else 									-- port #FF
+--			"11000" when (cs_xxfd = '1' and cpu0_rd_n = '0') else 									-- port #FD
+    		"11010" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_a_bus = X"FADF") else										-- Mouse0 port key, z
+		   "11011" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_a_bus = X"FBDF") else										-- Mouse0 port x
+		   "11100" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_a_bus = X"FFDF") else										-- Mouse0 port y 
+			"11101" when (cs_xxff = '1' and cpu0_rd_n = '0') else 									-- port #FF
 			(others => '1');
 
 -------------------------------------------------------------------------------
