@@ -14,7 +14,6 @@ entity video is
 		BORDER	: in std_logic_vector(2 downto 0);	-- цвет бордюра (порт #xxFE)
 		DI			: in std_logic_vector(7 downto 0);	-- видеоданные
 		TURBO 	: in std_logic := '0';
-		
 		INT		: out std_logic;
 		ATTR_O	: out std_logic_vector(7 downto 0);
 		A			: out std_logic_vector(12 downto 0);
@@ -22,7 +21,9 @@ entity video is
 		RGB		: out std_logic_vector(5 downto 0);		-- RRGGBB
 		HSYNC		: out std_logic;
 		VSYNC		: out std_logic;
-		INVERT_O : out std_logic
+		INVERT_O : out std_logic;
+		HCNT_O	: out std_logic_vector(8 downto 0);
+		VCNT_O	: out std_logic_vector(8 downto 0)
 		);
 end entity;
 
@@ -51,7 +52,7 @@ architecture rtl of video is
 	signal VIDEO_G 	: std_logic;
 	signal VIDEO_B 	: std_logic;
 	signal VIDEO_I 	: std_logic;	
-
+	
 begin
 
 	INVERT_O <= invert(0);
@@ -196,11 +197,11 @@ begin
 			if (ENA = '1') then 
 				case chr_col_cnt(2 downto 0) is
 					when "000" => -- data request
-						A <= std_logic_vector( ver_cnt(4 downto 3) & chr_row_cnt & ver_cnt(2 downto 0) & hor_cnt(4 downto 0) );
+							A <= std_logic_vector( ver_cnt(4 downto 3) & chr_row_cnt & ver_cnt(2 downto 0) & hor_cnt(4 downto 0) );
 					when "001" => -- read data into shift register
 						shift <= DI;
 					when "010" => -- attribute request 
-						A <= std_logic_vector( "110" & ver_cnt(4 downto 0) & hor_cnt(4 downto 0) );
+							A <= std_logic_vector( "110" & ver_cnt(4 downto 0) & hor_cnt(4 downto 0) );
 					when "011" => -- read attributes
 						attr <= DI;
 					when others => null;
@@ -214,5 +215,8 @@ RGB 	<= VIDEO_R & VIDEO_I & VIDEO_G & VIDEO_I & VIDEO_B & VIDEO_I when black = '
 ATTR_O	<= attr_r;
 BLANK	<= blank_r;
 paper <= '0' when hor_cnt(5) = '0' and ver_cnt(5) = '0' and ( ver_cnt(4) = '0' or ver_cnt(3) = '0' ) else '1';
+
+HCNT_O <= std_logic_vector(hor_cnt(5 downto 0) & chr_col_cnt(2 downto 0));
+VCNT_O <= std_logic_vector(ver_cnt(5 downto 0) & chr_row_cnt(2 downto 0));
 
 end architecture;

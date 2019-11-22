@@ -1,8 +1,9 @@
--------------------------------------------------------------------[18.07.2019]
--- u16-Karabas Version 0.1
+-------------------------------------------------------------------[18.11.2019]
+-- u16-Karabas Version 1.1
 -- DEVBOARD ReVerSE-U16
 -------------------------------------------------------------------------------
--- V0.1	   18.07.2019  TOP          	: first version
+-- V1.0	   18.07.2019  initial version
+-- V1.1		18.11.2019  Added ZXUNO registers and UART
 
 -- Copyright (c) 2011-2014 MVV
 -- Copyright (c) 2019 Andy Karpov
@@ -130,11 +131,17 @@ port (
 	USB_SO 			: in std_logic; -- dedicated clock / input only
 	USB_IO3 			: in std_logic; -- dedicated clock / input only 
 	
+	-- UART / ESP8266
+	UART_RX 			: in std_logic;  -- BP
+	UART_TX 			: out std_logic; -- AP
+	UART_RTS 		: out std_logic; -- AN
+	UART_CTS 		: in std_logic;  -- BN
+	
 	-- uBus
-	AP 				: in std_logic;
-	AN 				: in std_logic;
-	BP					: in std_logic; -- dedicated clock / input only 
-	BN 				: in std_logic; -- dedicated clock / input only
+--	AP 				: in std_logic;
+--	AN 				: in std_logic;
+--	BP					: in std_logic; -- dedicated clock / input only 
+--	BN 				: in std_logic; -- dedicated clock / input only
 	CP					: in std_logic; -- dedicated clock / input only
 	CN 				: in std_logic  -- dedicated clock / input only	
 );
@@ -173,6 +180,9 @@ signal port_dffd_reg : std_logic_vector(7 downto 0);
 -- PS/2 Keyboard
 signal kb_do_bus	: std_logic_vector(4 downto 0);
 signal kb_reset : std_logic := '0';
+signal kb_magic : std_logic := '0';
+signal kb_special : std_logic := '0';
+signal kb_turbo : std_logic := '0';
 
 -- Joy
 signal joy_bus : std_logic_vector(4 downto 0) := "11111";
@@ -190,12 +200,15 @@ signal vid_wr		: std_logic;
 signal vid_scr		: std_logic;
 signal vid_hsync	: std_logic;
 signal vid_vsync	: std_logic;
-signal vid_hcnt		: std_logic_vector(8 downto 0);
 signal vid_int		: std_logic;
 signal vid_attr	: std_logic_vector(7 downto 0);
 signal vid_rgb		: std_logic_vector(5 downto 0);
+signal vid_rgb_osd : std_logic_vector(5 downto 0);
 signal vid_border : std_logic_vector(2 downto 0);
 signal vid_invert : std_logic;
+
+signal vid_hcnt 	: std_logic_vector(8 downto 0);
+signal vid_vcnt 	: std_logic_vector(8 downto 0);
 
 signal vga_hsync	: std_logic;
 signal vga_vsync	: std_logic;
@@ -211,6 +224,13 @@ signal zc_cs_n		: std_logic;
 signal zc_sclk		: std_logic;
 signal zc_mosi		: std_logic;
 signal zc_miso		: std_logic;
+-- divmmc
+signal divmmc_do	: std_logic_vector(7 downto 0);
+signal divmmc_amap	: std_logic;
+signal divmmc_e3reg	: std_logic_vector(7 downto 0);	
+signal divmmc_cs_n	: std_logic;
+signal divmmc_sclk	: std_logic;
+signal divmmc_mosi	: std_logic;
 -- SPI
 signal spi_si		: std_logic;
 signal spi_so		: std_logic;
@@ -290,10 +310,10 @@ signal loader_act	: std_logic := '1';
 signal loader_reset : std_logic := '0';
 signal dos_act		: std_logic := '1';
 signal cpuclk		: std_logic;
-signal selector		: std_logic_vector(4 downto 0);
+signal selector		: std_logic_vector(7 downto 0);
 signal mux		: std_logic_vector(3 downto 0);
 signal ram_ext : std_logic_vector(7 downto 0) := "00000000";
-signal ram_ext_lock : std_logic := '0';
+signal ram_ext_lock : std_logic_vector(1 downto 0) := "00";
 -- Loader
 signal loader_ram_di	: std_logic_vector(7 downto 0);
 signal loader_ram_do	: std_logic_vector(7 downto 0);
@@ -314,6 +334,19 @@ signal host_vga_b : std_logic_vector(1 downto 0);
 signal host_vga_hs : std_logic;
 signal host_vga_vs : std_logic;
 signal host_vga_sblank : std_logic;
+-- UART 
+signal uart_oe_n   : std_logic := '1';
+signal uart_do_bus : std_logic_vector(7 downto 0);
+-- ZXUNO ports
+signal zxuno_regrd : std_logic;
+signal zxuno_regwr : std_logic;
+signal zxuno_addr : std_logic_vector(7 downto 0);
+signal zxuno_regaddr_changed : std_logic;
+signal zxuno_addr_oe_n : std_logic;
+signal zxuno_addr_to_cpu : std_logic_vector(7 downto 0);
+
+-- DivMMC / Z-Controller mode
+signal sd_mode : std_logic := '0'; -- 0 = ZC, 1 = DivMMC
 
 component saa1099
 port (
@@ -326,6 +359,51 @@ port (
 	din		: in std_logic_vector(7 downto 0);
 	out_l		: out std_logic_vector(7 downto 0);
 	out_r		: out std_logic_vector(7 downto 0));
+end component;
+
+component zxunoregs
+port (
+	clk: in std_logic;
+	rst_n : in std_logic;
+	a : in std_logic_vector(15 downto 0);
+	iorq_n : in std_logic;
+	rd_n : in std_logic;
+	wr_n : in std_logic;
+	din : in std_logic_vector(7 downto 0);
+	dout : out std_logic_vector(7 downto 0);
+	oe_n : out std_logic;
+	addr : out std_logic_vector(7 downto 0);
+	read_from_reg: out std_logic;
+	write_to_reg: out std_logic;
+	regaddr_changed: out std_logic);
+end component;
+
+component zxunouart
+port (
+	clk : in std_logic;
+	zxuno_addr : in std_logic_vector(7 downto 0);
+	zxuno_regrd : in std_logic;
+	zxuno_regwr : in std_logic;
+	din : in std_logic_vector(7 downto 0);
+	dout : out std_logic_vector(7 downto 0);
+	oe_n : out std_logic;
+	uart_tx : out std_logic;
+	uart_rx : in std_logic;
+	uart_rts : out std_logic);
+end component;
+
+component uart 
+port ( 
+	clk: in std_logic;
+	txdata: in std_logic_vector(7 downto 0);
+	txbegin: in std_logic;
+	txbusy : out std_logic;
+	rxdata : out std_logic_vector(7 downto 0);
+	rxrecv : out std_logic;
+	data_read : in std_logic;
+	rx : in std_logic;
+	tx : out std_logic;
+	rts: out std_logic);
 end component;
 
 begin
@@ -415,8 +493,26 @@ port map (
 	RGB				=> vid_rgb,
 	HSYNC				=> vid_hsync,
 	VSYNC				=> vid_vsync,
-	INVERT_O 		=> vid_invert
+	INVERT_O 		=> vid_invert,
+	
+	HCNT_O 			=> vid_hcnt,
+	VCNT_O			=> vid_vcnt
+	
 	);
+	
+U3_1: entity work.osd
+port map (
+	CLK 	=> clk_bus,
+	EN 	=> '1',
+	RGB_I => vid_rgb,
+	RGB_O => vid_rgb_osd,
+	HCNT_I => vid_hcnt,
+	VCNT_I => vid_vcnt,
+	PORT_1 => port_1ffd_reg,
+	PORT_2 => port_eff7_reg,
+	PORT_3 => port_7ffd_reg,
+	PORT_4 => port_dffd_reg	
+);
 	
 -- Video memory
 U4: entity work.altram1
@@ -449,7 +545,10 @@ port map(
 	O_MOUSE_Z		=> ms_z,
 	O_MOUSE_BUTTONS => ms_b,
 	O_JOYSTICK 		=> joy_bus,
-	O_RESET 	=> kb_reset
+	O_RESET 	=> kb_reset,
+	O_MAGIC => kb_magic,
+	O_SPECIAL => kb_special,
+	O_TURBO => kb_turbo
 	);
 	
 -- Z-Controller
@@ -468,6 +567,28 @@ port map (
 	SCLK				=> zc_sclk,
 	MOSI				=> zc_mosi,
 	MISO				=> SD_SO);
+	
+-- divmmc interface
+U18: entity work.divmmc
+port map (
+	CLK		=> clk_bus,
+	EN		=> sd_mode,
+	RESET		=> reset,
+	ADDR		=> cpu0_a_bus,
+	DI		=> cpu0_do_bus,
+	DO		=> divmmc_do,
+	WR_N		=> cpu0_wr_n,
+	RD_N		=> cpu0_rd_n,
+	IORQ_N		=> cpu0_iorq_n,
+	MREQ_N		=> cpu0_mreq_n,
+	M1_N		=> cpu0_m1_n,
+	E3REG		=> divmmc_e3reg,
+	AMAP		=> divmmc_amap,
+	CS_N		=> divmmc_cs_n,
+	SCLK		=> divmmc_sclk,
+	MOSI		=> divmmc_mosi,
+	MISO		=> SD_SO);
+
 	
 -- TurboSound
 U7: entity work.turbosound
@@ -581,7 +702,7 @@ generic map (
 	vpad				=>   0	-- create V black border
 )
 port map (
-	I_VIDEO			=> vid_rgb,
+	I_VIDEO			=> vid_rgb_osd,
 	I_HSYNC			=> vid_hsync,
 	I_VSYNC			=> vid_vsync,
 	O_VIDEO(5 downto 4)	=> host_vga_r,
@@ -637,8 +758,37 @@ port map(
 	din		=> cpu0_do_bus,
 	out_l		=> saa_out_l,
 	out_r		=> saa_out_r);
+	
+-- UART (via ZX UNO ports #FC3B / #FD3B) 
+U16: zxunoregs 
+port map(
+	clk => clk_bus, -- todo
+	rst_n => not reset,
+	a => cpu0_a_bus,
+	iorq_n => cpu0_iorq_n,
+	rd_n => cpu0_rd_n,
+	wr_n => cpu0_wr_n,
+	din => cpu0_do_bus,
+	dout => zxuno_addr_to_cpu,
+	oe_n => zxuno_addr_oe_n,
+	addr => zxuno_addr,
+	read_from_reg => zxuno_regrd,
+	write_to_reg => zxuno_regwr,
+	regaddr_changed => zxuno_regaddr_changed);
 
-
+U17: zxunouart 
+port map(
+	clk => clk7,
+	zxuno_addr => zxuno_addr,
+	zxuno_regrd => zxuno_regrd,
+	zxuno_regwr => zxuno_regwr,
+	din => cpu0_do_bus,
+	dout => uart_do_bus,
+	oe_n => uart_oe_n,
+	uart_tx => UART_TX,
+	uart_rx => UART_RX,
+	uart_rts => UART_RTS);
+	
 -------------------------------------------------------------------------------
 -- Global signals
 
@@ -658,9 +808,11 @@ ena_0_4375mhz <= ena_cnt(5) and ena_cnt(4) and ena_cnt(3) and ena_cnt(2) and ena
 areset <= not USB_NRESET;					 -- global reset
 reset <= areset or kb_reset or not(locked) or loader_reset or loader_act; -- hot reset
 
+sd_mode <= '1' when kb_special = '1' else '0';
+
 cpu0_reset_n <= not(reset) and not(loader_reset);					-- CPU reset
 cpu0_inta_n <= cpu0_iorq_n or cpu0_m1_n;	-- INTA
-cpu0_nmi_n <= '1';				-- NMI
+cpu0_nmi_n <= '0' when kb_magic = '1' else '1';				-- NMI
 --cpu0_wait_n <= '1';
 --cpuclk <= clk_bus and cpu0_ena when mc146818_busy = '0' else '0';
 cpu0_wait_n <= not mc146818_busy; -- WAIT
@@ -680,7 +832,9 @@ end process;
 
 host_ram_a <= ram_a_bus & cpu0_a_bus(12 downto 0);
 host_ram_di <= cpu0_do_bus;
-host_ram_wr <= '1' when cpu0_mreq_n = '0' and cpu0_wr_n = '0' and (mux = "1000" or mux(3 downto 2) = "01" or mux(3 downto 1) = "001" or mux(3 downto 2) = "11" or mux(3 downto 1) = "101") else '0';
+--host_ram_wr <= '1' when cpu0_mreq_n = '0' and cpu0_wr_n = '0' and (mux = "1000" or mux(3 downto 2) = "01" or mux(3 downto 1) = "001" or mux(3 downto 2) = "11" or mux(3 downto 1) = "101") else '0';
+host_ram_wr <= '1' when cpu0_mreq_n = '0' and cpu0_wr_n = '0' and (mux = "1001" or mux(3 downto 2) = "11" or mux(3 downto 2) = "01" or mux(3 downto 1) = "101" or mux(3 downto 1) = "001") else '0';
+
 host_ram_rd <= not (cpu0_mreq_n or cpu0_rd_n);
 host_ram_rfsh <= not cpu0_rfsh_n;
 
@@ -696,9 +850,9 @@ sdr_rfsh <= loader_ram_rfsh when loader_act = '1' else host_ram_rfsh;
 -------------------------------------------------------------------------------
 -- SD
 
-SD_NCS	<= zc_cs_n;
-SD_CLK 	<= zc_sclk;
-SD_SI 	<= zc_mosi;
+SD_NCS	<= zc_cs_n when sd_mode = '0' else divmmc_cs_n;
+SD_CLK 	<= zc_sclk when sd_mode = '0' else divmmc_sclk;
+SD_SI 	<= zc_mosi when sd_mode = '0' else divmmc_mosi;
 
 -------------------------------------------------------------------------------
 -- Ports
@@ -720,7 +874,7 @@ begin
 	end if;
 end process;
 
---ram_ext_lock <= port_7ffd_reg(5); --'1' when (port_1ffd_reg(1) = '1' and port_7ffd_reg(5) = '1') else '0';
+ram_ext_lock <= port_1ffd_reg(1) & port_7ffd_reg(5);
 cs_xxfe <= '1' when cpu0_iorq_n = '0' and cpu0_m1_n = '1' and cpu0_a_bus(0) = '0' else '0';
 cs_xxff <= '1' when cpu0_iorq_n = '0' and cpu0_m1_n = '1' and cpu0_a_bus(7 downto 0) = X"FF" else '0';
 cs_eff7 <= '1' when cpu0_iorq_n = '0' and cpu0_m1_n = '1' and cpu0_a_bus = X"EFF7" else '0';
@@ -730,6 +884,7 @@ cs_1ffd <= '1' when cpu0_iorq_n = '0' and cpu0_m1_n = '1' and cpu0_a_bus = X"1FF
 cs_dffd <= '1' when cpu0_iorq_n = '0' and cpu0_m1_n = '1' and cpu0_a_bus = X"DFFD" and fd_port = '1' else '0';
 cs_7ffd <= '1' when cpu0_iorq_n = '0' and cpu0_m1_n = '1' and cpu0_a_bus = X"7FFD" else '0';
 cs_xxfd <= '1' when cpu0_iorq_n = '0' and cpu0_m1_n = '1' and cpu0_a_bus(15) = '0' and cpu0_a_bus(1) = '0' and fd_port = '0' else '0';
+
 
 process (reset, areset, clk_bus, cpu0_a_bus, dos_act, cs_xxfe, cs_eff7, cs_dff7, cs_7ffd, cs_1ffd, cs_xxfd, port_7ffd_reg, port_1ffd_reg, cpu0_mreq_n, cpu0_m1_n, cpu0_wr_n, cpu0_do_bus, fd_port)
 begin
@@ -767,36 +922,41 @@ begin
 		end if;
 		
 		-- #7FFD
-		if cs_7ffd = '1' and cpu0_wr_n = '0' then
+		if cs_7ffd = '1' and cpu0_wr_n = '0' and ram_ext_lock /= "11" then
 			port_7ffd_reg <= cpu0_do_bus;
 		-- #FD
-		elsif cs_xxfd = '1' and cpu0_wr_n = '0' then -- short #FD
+		elsif cs_xxfd = '1' and cpu0_wr_n = '0' and ram_ext_lock /= "11" then -- short #FD
 			port_7ffd_reg <= cpu0_do_bus;
 		end if;
 		
 		-- TR-DOS FLAG
 		if cpu0_m1_n = '0' and cpu0_mreq_n = '0' and cpu0_a_bus(15 downto 8) = X"3D" and port_7ffd_reg(4) = '1' then dos_act <= '1';
 		elsif cpu0_m1_n = '0' and cpu0_mreq_n = '0' and cpu0_a_bus(15 downto 14) /= "00" then dos_act <= '0'; end if;
+		
 	end if;
 end process;
 
 ------------------------------------------------------------------------------
 -- RAM mux / ext
 
-mux <= '0' & cpu0_a_bus(15 downto 13);
-ram_ext <= port_dffd_reg(2 downto 0) & port_7ffd_reg(5) & port_7ffd_reg(6) & port_7ffd_reg(7) & port_1ffd_reg(7) & port_1ffd_reg(4);-- when port_1ffd_reg(1) = '0' else "00000000";
+mux <= ((divmmc_amap or divmmc_e3reg(7)) and sd_mode) & cpu0_a_bus(15 downto 13);
+ram_ext <= 
+	port_dffd_reg(2 downto 0) & port_7ffd_reg(5) & port_7ffd_reg(6) & port_7ffd_reg(7) & port_1ffd_reg(7) & port_1ffd_reg(4) when ram_ext_lock(1) = '0'
+	else "00000000";
 
-process (mux, port_7ffd_reg, cpu0_a_bus, dos_act, ram_ext)
+process (mux, port_7ffd_reg, cpu0_a_bus, dos_act, ram_ext, divmmc_e3reg, sd_mode, port_1ffd_reg)
 begin
 	case mux is
-		when "0000" => ram_a_bus <= "100001000" & (not(dos_act) ) & (port_7ffd_reg(4) ) & '0';	-- Seg0 ROM 0000-1FFF
-		when "0001" => ram_a_bus <= "100001000" & (not(dos_act) ) & (port_7ffd_reg(4) ) & '1';	-- Seg0 ROM 2000-3FFF
-		when "0010" => ram_a_bus <= "000000001010";	-- Seg1 RAM 4000-5FFF
-		when "0011" => ram_a_bus <= "000000001011";	-- Seg1 RAM 6000-7FFF
-		when "0100" => ram_a_bus <= "000000000100";	-- Seg2 RAM 8000-9FFF
-		when "0101" => ram_a_bus <= "000000000101";	-- Seg2 RAM A000-BFFF
-		when "0110" => ram_a_bus <= ram_ext & port_7ffd_reg(2 downto 0) & '0';	-- Seg3 RAM C000-DFFF
-		when "0111" => ram_a_bus <= ram_ext & port_7ffd_reg(2 downto 0) & '1';	-- Seg3 RAM E000-FFFF
+		when "0000" => ram_a_bus <= "100001000" & ((not(dos_act) and not(port_1ffd_reg(1))) or sd_mode) & (port_7ffd_reg(4) and not(port_1ffd_reg(1))) & '0';	-- Seg0 ROM 0000-1FFF
+		when "0001" => ram_a_bus <= "100001000" & ((not(dos_act) and not(port_1ffd_reg(1))) or sd_mode) & (port_7ffd_reg(4) and not(port_1ffd_reg(1))) & '1';	-- Seg0 ROM 2000-3FFF	
+		when "1000" => ram_a_bus <= "100001001000";	-- ESXDOS ROM 0000-1FFF
+		when "1001" => ram_a_bus <= "100000" & divmmc_e3reg(5 downto 0);	-- ESXDOS RAM 2000-3FFF		
+		when "0010"|"1010" => ram_a_bus <= "000000001010";	-- Seg1 RAM 4000-5FFF
+		when "0011"|"1011" => ram_a_bus <= "000000001011";	-- Seg1 RAM 6000-7FFF
+		when "0100"|"1100" => ram_a_bus <= "000000000100";	-- Seg2 RAM 8000-9FFF
+		when "0101"|"1101" => ram_a_bus <= "000000000101";	-- Seg2 RAM A000-BFFF
+		when "0110"|"1110" => ram_a_bus <= ram_ext & port_7ffd_reg(2 downto 0) & '0';	-- Seg3 RAM C000-DFFF
+		when "0111"|"1111" => ram_a_bus <= ram_ext & port_7ffd_reg(2 downto 0) & '1';	-- Seg3 RAM E000-FFFF		
 		when others => null;
 	end case;
 end process;
@@ -827,39 +987,46 @@ zc_rd 		<= '1' when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_a_bus(7 down
 process (selector, host_ram_do, mc146818_do_bus, kb_do_bus, zc_do_bus, ssg_cn0_bus, ssg_cn1_bus, port_7ffd_reg, vid_attr, port_eff7_reg)
 begin
 	case selector is
-		when "00010" => cpu0_di_bus <= host_ram_do;
-		when "00110" => cpu0_di_bus <= mc146818_do_bus;
-		when "00111" => cpu0_di_bus <= "111" & kb_do_bus;
-		when "01000" => cpu0_di_bus <= zc_do_bus;
-		when "01101" => cpu0_di_bus <= "000" & joy_bus;
-		when "01110" => cpu0_di_bus <= ssg_cn0_bus;
-		when "01111" => cpu0_di_bus <= ssg_cn1_bus;
-		when "10001" => cpu0_di_bus <= port_1ffd_reg;
-		when "10100" => cpu0_di_bus <= port_7ffd_reg;
---		when "11000" => cpu0_di_bus <= port_7ffd_reg;
-		when "11010" => cpu0_di_bus <= ms_z(3 downto 0) & '1' & not ms_b(2) & not ms_b(0) & not ms_b(1);
-		when "11011" => cpu0_di_bus <= ms_x;
-		when "11100" => cpu0_di_bus <= not(ms_y);
-		when "11101" => cpu0_di_bus <= vid_attr;
+		when x"00" => cpu0_di_bus <= host_ram_do;
+		when x"01" => cpu0_di_bus <= mc146818_do_bus;
+		when x"02" => cpu0_di_bus <= "111" & kb_do_bus;
+		when x"03" => cpu0_di_bus <= zc_do_bus;
+		when x"04" => cpu0_di_bus <= "000" & joy_bus;
+		when x"05" => cpu0_di_bus <= ssg_cn0_bus;
+		when x"06" => cpu0_di_bus <= ssg_cn1_bus;
+		when x"07" => cpu0_di_bus <= port_1ffd_reg;
+		when x"08" => cpu0_di_bus <= port_7ffd_reg;
+--		when x"09" => cpu0_di_bus <= port_7ffd_reg;
+		when x"0A" => cpu0_di_bus <= ms_z(3 downto 0) & '1' & not ms_b(2) & not ms_b(0) & not ms_b(1);
+		when x"0B" => cpu0_di_bus <= ms_x;
+		when x"0C" => cpu0_di_bus <= not(ms_y);
+		when x"0D" => cpu0_di_bus <= divmmc_do;
+		when x"0E" => cpu0_di_bus <= zxuno_addr_to_cpu;
+		when x"0F" => cpu0_di_bus <= uart_do_bus;
+--		when x"11" => cpu0_di_bus <= vid_attr;
 		when others  => cpu0_di_bus <= (others => '1');
 	end case;
 end process;
 
 selector <= 
-			"00010" when (cpu0_mreq_n = '0' and cpu0_rd_n = '0') else 																									-- SDRAM
-			"00110" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_m1_n = '1' and port_bff7 = '1' and port_eff7_reg(7) = '1') else 									-- MC146818A
-			"00111" when (cs_xxfe = '1' and cpu0_rd_n = '0') else 													-- Keyboard, port #FE
-			"01000" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_m1_n = '1' and cpu0_a_bus( 7 downto 6) = "01" and cpu0_a_bus(4 downto 0) = "10111") else 	-- Z-Controller
-			"01101" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_m1_n = '1' and cpu0_a_bus( 7 downto 0) = X"1F" and dos_act = '0') else 							-- Joystick, port #1F
-			"01110" when (cs_fffd = '1' and cpu0_rd_n = '0' and ssg_sel = '0') else -- TurboSound
-			"01111" when (cs_fffd = '1' and cpu0_rd_n = '0' and ssg_sel = '1') else
-			"10001" when (cs_1ffd = '1' and cpu0_rd_n = '0') else										-- port #1FFD
-			"10100" when (cs_7ffd = '1' and cpu0_rd_n = '0') else										-- port #7FFD
---			"11000" when (cs_xxfd = '1' and cpu0_rd_n = '0') else 									-- port #FD
-    		"11010" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_a_bus = X"FADF") else										-- Mouse0 port key, z
-		   "11011" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_a_bus = X"FBDF") else										-- Mouse0 port x
-		   "11100" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_a_bus = X"FFDF") else										-- Mouse0 port y 
-			"11101" when (cs_xxff = '1' and cpu0_rd_n = '0') else 									-- port #FF
+			x"00" when (cpu0_mreq_n = '0' and cpu0_rd_n = '0') else 																									-- SDRAM
+			x"01" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_m1_n = '1' and port_bff7 = '1' and port_eff7_reg(7) = '1') else 									-- MC146818A
+			x"02" when (cs_xxfe = '1' and cpu0_rd_n = '0') else 													-- Keyboard, port #FE
+			x"03" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_m1_n = '1' and cpu0_a_bus( 7 downto 6) = "01" and cpu0_a_bus(4 downto 0) = "10111") and sd_mode = '0' else 	-- Z-Controller
+			x"04" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_m1_n = '1' and cpu0_a_bus( 7 downto 0) = X"1F" and dos_act = '0') else 							-- Joystick, port #1F
+			x"05" when (cs_fffd = '1' and cpu0_rd_n = '0' and ssg_sel = '0') else -- TurboSound
+			x"06" when (cs_fffd = '1' and cpu0_rd_n = '0' and ssg_sel = '1') else
+			x"07" when (cs_1ffd = '1' and cpu0_rd_n = '0') else										-- port #1FFD
+			x"08" when (cs_7ffd = '1' and cpu0_rd_n = '0') else										-- port #7FFD
+--			x"09" when (cs_xxfd = '1' and cpu0_rd_n = '0') else 									-- port #FD
+    		x"0A" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_a_bus = X"FADF") else										-- Mouse0 port key, z
+		   x"0B" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_a_bus = X"FBDF") else										-- Mouse0 port x
+		   x"0C" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_a_bus = X"FFDF") else										-- Mouse0 port y 
+			x"0D" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_a_bus( 7 downto 0) = X"EB" and sd_mode = '1') else -- DivMMC
+			x"0E" when zxuno_addr_oe_n = '0' else -- ZX UNO address 
+			x"0F" when uart_oe_n = '0' else -- UART
+--			x"10" when (cs_xxff = '1' and cpu0_rd_n = '0' and is_port_ff = '1') else 		-- port #FF (Timex)
+--			x"11" when (cs_xxff = '1' and cpu0_rd_n = '0' and is_port_ff = '0') else 		-- port #FF (normal)
 			(others => '1');
 
 -------------------------------------------------------------------------------

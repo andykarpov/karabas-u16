@@ -25,7 +25,10 @@ port (
 	O_MOUSE_Z		: out std_logic_vector(7 downto 0);
 	O_MOUSE_BUTTONS		: out std_logic_vector(7 downto 0);	
 	O_JOYSTICK 		: out std_logic_vector(4 downto 0);
-	O_RESET 		: out std_logic
+	O_RESET 		: out std_logic;
+	O_MAGIC 	 	: out std_logic;
+	O_TURBO 		: out std_logic;
+	O_SPECIAL	: out std_logic
 );
 end deserializer;
 
@@ -93,6 +96,9 @@ begin
 	);
 	
 	O_RESET <= reset;
+	O_MAGIC <= magic;
+	O_TURBO <= turbo;
+	O_SPECIAL <= special;
 	
 	-- Mouse
 	O_MOUSE_BUTTONS <= b;
@@ -186,6 +192,7 @@ begin
 				is_esc <= '0';
 				is_bksp <= '0';
 				reset <= '0';
+				magic <= '0';
 				
 			elsif is_macros = '1' then 
 				if I_CLK_RATE /= prev_clk_rate then -- falling edge of KB CLK RATE
@@ -219,6 +226,7 @@ begin
 						is_esc <= '0';
 						is_bksp <= '0';
 						reset <= '0';
+						magic <= '0';
 					when others => null;
 				end case;
 			elsif ready = '1' then
@@ -414,11 +422,11 @@ begin
 								-- PgDown -> CS+4 for ZX
 								when X"4E" => kb_data(ZX_K_CS) <= '1'; kb_data(ZX_K_4) <= '1'; is_cs_used <= '1';
 								
-								-- Scroll Lock -> Turbo 
-								when X"47" => turbo <= not(turbo);
+								-- Scroll Lock -> Special
+								when X"47" => special <= not(special);
 								
-								-- PrintScreen -> Special
-								when X"46" => special <= not(special);
+								-- PrintScreen -> Turbo
+								when X"46" => turbo <= not(turbo);
 								
 								-- F2 -> Magic
 								when X"3B" => magic <= '1';

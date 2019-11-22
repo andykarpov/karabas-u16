@@ -138,8 +138,8 @@ SDRAM_A[9]                   : 67        : output : 3.3-V LVTTL       :         
 OUT_L                        : 68        : output : 3.3-V LVTTL       :         : 4         : Y              
 OUT_R                        : 69        : output : 3.3-V LVTTL       :         : 4         : Y              
 VCCINT                       : 70        : power  :                   : 1.2V    :           :                
-AP                           : 71        : input  : 3.3-V LVTTL       :         : 4         : Y              
-AN                           : 72        : input  : 3.3-V LVTTL       :         : 4         : Y              
+UART_TX                      : 71        : output : 3.3-V LVTTL       :         : 4         : Y              
+UART_RTS                     : 72        : output : 3.3-V LVTTL       :         : 4         : Y              
 VCCD_PLL4                    : 73        : power  :                   : 1.2V    :           :                
 GNDA4                        : 74        : gnd    :                   :         :           :                
 VCCA4                        : 75        : power  :                   : 2.5V    :           :                
@@ -155,8 +155,8 @@ VCCINT                       : 84        : power  :                   : 1.2V    
 SDRAM_A[8]                   : 85        : output : 3.3-V LVTTL       :         : 5         : Y              
 SDRAM_A[1]                   : 86        : output : 3.3-V LVTTL       :         : 5         : Y              
 SDRAM_A[2]                   : 87        : output : 3.3-V LVTTL       :         : 5         : Y              
-BN                           : 88        : input  : 3.3-V LVTTL       :         : 5         : Y              
-BP                           : 89        : input  : 3.3-V LVTTL       :         : 5         : Y              
+UART_CTS                     : 88        : input  : 3.3-V LVTTL       :         : 5         : Y              
+UART_RX                      : 89        : input  : 3.3-V LVTTL       :         : 5         : Y              
 CN                           : 90        : input  : 3.3-V LVTTL       :         : 6         : Y              
 CP                           : 91        : input  : 3.3-V LVTTL       :         : 6         : Y              
 CONF_DONE                    : 92        :        :                   :         : 6         :                

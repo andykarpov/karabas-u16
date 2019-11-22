@@ -23,7 +23,7 @@ entity loader is
 generic (
 	FLASH_ADDR_START	: std_logic_vector(23 downto 0) := "000010111000000000000000"; -- 753664; -- 24bit address
 	RAM_ADDR_START		: std_logic_vector(24 downto 0) := "1000010000000000000000000"; -- 25 bit address
-	SIZE_TO_READ		: integer := 65536; -- count of bytes to read
+	SIZE_TO_READ		: integer := 73728; -- count of bytes to read (64 rom + 8kb esxdos)
 	
 	SPI_CMD_READ  		: std_logic_vector(7 downto 0) := X"03"; -- W25Q16 read command
 	SPI_CMD_POWERON 	: std_logic_vector(7 downto 0) := X"AB" -- W25Q16 power on command
