@@ -25,6 +25,12 @@ generic (
 	RAM_ADDR_START		: std_logic_vector(24 downto 0) := "1000010000000000000000000"; -- 25 bit address
 	SIZE_TO_READ		: integer := 73728; -- count of bytes to read (64 rom + 8kb esxdos)
 	
+--	RAM_CLEAR_ADDR_START	: std_logic_vector(24 downto 0) := "1000000000000000000000000"; 
+--	SIZE_TO_CLEAR 		: integer := 524288; -- count of bytes to clear
+
+	RAM_CLEAR_ADDR_START	: std_logic_vector(24 downto 0) := "0000000000000000000000000"; 
+	SIZE_TO_CLEAR 		: integer := 131072; -- count of bytes to clear
+	
 	SPI_CMD_READ  		: std_logic_vector(7 downto 0) := X"03"; -- W25Q16 read command
 	SPI_CMD_POWERON 	: std_logic_vector(7 downto 0) := X"AB" -- W25Q16 power on command
 );
@@ -82,8 +88,12 @@ signal sdr_rfsh		: std_logic;
 signal loader_act 	: std_logic := '1';
 signal reset_cnt  	: std_logic_vector(3 downto 0) := "0000";
 signal read_cnt 		: std_logic_vector(16 downto 0) := (others => '0');
+signal clear_cnt 		: std_logic_vector(20 downto 0) := (others => '0');
 
-type machine IS(init, release_init, wait_init, ready, cmd_read, cmd_end_read, do_read, do_next, finish);     --state machine datatype
+type machine IS(init, release_init, wait_init, 
+					 ready, cmd_read, cmd_end_read, do_read, do_next, finish, 
+					 clear, do_clear, do_next_clear, 
+					 finish2);     --state machine datatype
 signal state 			: machine; --current state
 
 begin
@@ -191,8 +201,25 @@ begin
 				spi_a_bus <= spi_a_bus + 1; -- increment flash address 
 				sdr_a_bus <= sdr_a_bus + 1; -- increment ram address
 				state <= ready;
-			when finish => -- read all the required data from SPI flash
-				state <= finish; -- infinite loop here
+			when finish => -- finish of reading flash to ram
+				-- state <= clear;
+				state <= finish2;
+			when clear => -- clear ready state
+				if (clear_cnt < SIZE_TO_CLEAR) then 
+					state <= do_clear;
+				else 
+					state <= finish2;
+				end if;
+			when do_clear => 
+				sdr_wr <= '1'; -- begin ram write
+				sdr_di_bus <= "00000000"; 
+				state <= do_next_clear;
+			when do_next_clear => 
+				sdr_wr <= '0'; -- end ram write
+				clear_cnt <= clear_cnt + 1; -- increment read counter
+				state <= clear;		
+			when finish2 => -- read all the required data from SPI flash
+				state <= finish2; -- infinite loop here
 				loader_act <= '0'; -- loader finished
 		end case;
 	

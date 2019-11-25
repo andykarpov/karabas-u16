@@ -177,6 +177,12 @@ set_instance_assignment -name GLOBAL_SIGNAL "GLOBAL CLOCK" -to CLK_50MHZ
 set_location_assignment PIN_72 -to UART_RTS
 set_location_assignment PIN_71 -to UART_TX
 set_location_assignment PIN_89 -to UART_RX
+set_location_assignment PIN_88 -to UART_CTS
+set_global_assignment -name VERILOG_FILE ../rtl/video/vga_scandoubler.v
+set_global_assignment -name VERILOG_FILE ../rtl/video/lut.v
+set_global_assignment -name VERILOG_FILE ../rtl/video/ula_radas.v
+set_global_assignment -name VERILOG_FILE ../rtl/video/pal_sync_generator.v
+set_global_assignment -name VERILOG_FILE ../rtl/video/control_rasterint.v
 set_global_assignment -name VHDL_FILE ../rtl/sd/divmmc.vhd
 set_global_assignment -name VERILOG_FILE ../rtl/uart/zxunouart.v
 set_global_assignment -name VERILOG_FILE ../rtl/uart/zxunoregs.v
@@ -222,5 +228,4 @@ set_global_assignment -name VHDL_FILE ../rtl/dac/dac.vhd
 set_global_assignment -name VHDL_FILE ../rtl/rtc/i2c_master.vhd
 set_global_assignment -name QIP_FILE ../rtl/pll/altpll1.qip
 set_global_assignment -name VHDL_FILE ../rtl/video/osd.vhd
-set_location_assignment PIN_88 -to UART_CTS
 set_instance_assignment -name PARTITION_HIERARCHY root_partition -to | -section_id Top

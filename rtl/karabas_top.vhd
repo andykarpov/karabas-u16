@@ -4,6 +4,7 @@
 -------------------------------------------------------------------------------
 -- V1.0	   18.07.2019  initial version
 -- V1.1		18.11.2019  Added ZXUNO registers and UART
+-- V1.2 		24.11.2019  Added ZXUNO Timex HiRes + Timex HiColor modes
 
 -- Copyright (c) 2011-2014 MVV
 -- Copyright (c) 2019 Andy Karpov
@@ -59,7 +60,7 @@ use IEEE.numeric_std.all;
 -- 1 0000_1000 01xx_xxxx xxxx_xxxx	1084000-1007FFF		TR-DOS	16K
 -- 1 0000_1000 10xx_xxxx xxxx_xxxx	1088000-100BFFF		ROM'86	16K
 -- 1 0000_1000 11xx_xxxx xxxx_xxxx	108C000-100FFFF		ROM'82	16K
--- 1 0000_1001 000x_xxxx xxxx_xxxx	1090000-1091FFF		divMMC	 8K
+-- 1 0000_1001 000x_xxxx xxxx_xxxx	1090000-1091FFF		ESXDOS	 8K
 
 
 -- FLASH 2048K:
@@ -70,7 +71,7 @@ use IEEE.numeric_std.all;
 -- 6C000-6FFFF		TR-DOS 			16K
 -- 70000-73FFF		OS'86 			16K
 -- 74000-77FFF		OS'82 			16K
--- 78000-7AFFF		free			 	8K
+-- 78000-7AFFF		ESXDOS		 	8K
 -- 7B000-7BFFF		free		 		8К
 -- 7C000-7FFFF		free				16К
 
@@ -194,7 +195,7 @@ signal ms_z		: std_logic_vector(7 downto 0);
 signal ms_b		: std_logic_vector(7 downto 0);
 
 -- Video
-signal vid_a_bus	: std_logic_vector(12 downto 0);
+signal vid_a_bus	: std_logic_vector(13 downto 0);
 signal vid_di_bus	: std_logic_vector(7 downto 0);
 signal vid_wr		: std_logic;
 signal vid_scr		: std_logic;
@@ -202,8 +203,8 @@ signal vid_hsync	: std_logic;
 signal vid_vsync	: std_logic;
 signal vid_int		: std_logic;
 signal vid_attr	: std_logic_vector(7 downto 0);
-signal vid_rgb		: std_logic_vector(5 downto 0);
-signal vid_rgb_osd : std_logic_vector(5 downto 0);
+signal vid_rgb		: std_logic_vector(8 downto 0);
+signal vid_rgb_osd : std_logic_vector(8 downto 0);
 signal vid_border : std_logic_vector(2 downto 0);
 signal vid_invert : std_logic;
 
@@ -213,9 +214,9 @@ signal vid_vcnt 	: std_logic_vector(8 downto 0);
 signal vga_hsync	: std_logic;
 signal vga_vsync	: std_logic;
 signal vga_blank	: std_logic;
-signal vga_r		: std_logic_vector(1 downto 0);
-signal vga_g		: std_logic_vector(1 downto 0);
-signal vga_b		: std_logic_vector(1 downto 0);
+signal vga_r		: std_logic_vector(2 downto 0);
+signal vga_g		: std_logic_vector(2 downto 0);
+signal vga_b		: std_logic_vector(2 downto 0);
 -- Z-Controller
 signal zc_do_bus	: std_logic_vector(7 downto 0);
 signal zc_rd		: std_logic;
@@ -328,9 +329,9 @@ signal host_ram_a	: std_logic_vector(24 downto 0);
 signal host_ram_wr : std_logic;
 signal host_ram_rd : std_logic;
 signal host_ram_rfsh : std_logic;
-signal host_vga_r : std_logic_vector(1 downto 0);
-signal host_vga_g : std_logic_vector(1 downto 0);
-signal host_vga_b : std_logic_vector(1 downto 0);
+signal host_vga_r : std_logic_vector(2 downto 0);
+signal host_vga_g : std_logic_vector(2 downto 0);
+signal host_vga_b : std_logic_vector(2 downto 0);
 signal host_vga_hs : std_logic;
 signal host_vga_vs : std_logic;
 signal host_vga_sblank : std_logic;
@@ -347,6 +348,22 @@ signal zxuno_addr_to_cpu : std_logic_vector(7 downto 0);
 
 -- DivMMC / Z-Controller mode
 signal sd_mode : std_logic := '0'; -- 0 = ZC, 1 = DivMMC
+
+-- ULA
+signal rasterint_do_bus: std_logic_vector(7 downto 0);
+signal rasterint_oe_n: std_logic;
+signal rasterint_enable: std_logic;
+signal vretraceint_disable: std_logic;
+signal raster_line: std_logic_vector(8 downto 0);
+signal raster_int_in_progress: std_logic;
+signal cpu_contention : std_logic;
+signal access_to_screen: std_logic;
+signal tape_in : std_logic := '1';
+signal tape_out : std_logic;
+signal speaker: std_logic;
+signal ioreqbank: std_logic;
+signal ula_do_bus : std_logic_vector(7 downto 0);
+signal timexcfg_reg : std_logic_vector(7 downto 0);
 
 component saa1099
 port (
@@ -406,6 +423,143 @@ port (
 	rts: out std_logic);
 end component;
 
+component rasterint_ctrl 
+port (
+    clk : in std_logic;
+    rst_n : in std_logic;
+    zxuno_addr : in std_logic_vector(7 downto 0);
+    zxuno_regrd : in std_logic;
+    zxuno_regwr : in std_logic;
+    din : in std_logic_vector(7 downto 0);
+    dout: out std_logic_vector(7 downto 0);
+    oe_n : out std_logic;
+    rasterint_enable : out std_logic;
+    vretraceint_disable : out std_logic;
+    raster_line : out std_logic_vector(8 downto 0);
+    raster_int_in_progress: in std_logic);
+end component;
+
+component pal_sync_generator 
+port (
+    clk : in std_logic;
+    mode : in std_logic_vector(1 downto 0);   -- 00: 48K, 01: 128K, 10: Pentagon, 11: Reserved
+
+    rasterint_enable : in std_logic;
+    vretraceint_disable : in std_logic;
+    raster_line : in std_logic_vector(8 downto 0);
+    raster_int_in_progress: out std_logic;
+    csync_option: in std_logic;
+    
+    hinit48k: in std_logic_vector(8 downto 0);
+    vinit48k: in std_logic_vector(8 downto 0);
+    hinit128k: in std_logic_vector(8 downto 0);
+    vinit128k: in std_logic_vector(8 downto 0);
+    hinitpen: in std_logic_vector(8 downto 0);
+    vinitpen: in std_logic_vector(8 downto 0);
+    
+    ri: in std_logic_vector(2 downto 0);
+    gi: in std_logic_vector(2 downto 0);
+    bi: in std_logic_vector(2 downto 0);
+    hcnt: out std_logic_vector(8 downto 0);
+    vcnt: out std_logic_vector(8 downto 0);
+    ro: out std_logic_vector(2 downto 0);
+    go: out std_logic_vector(2 downto 0);
+    bo: out std_logic_vector(2 downto 0);
+    hsync: out std_logic;
+    vsync: out std_logic;
+    csync: out std_logic;
+    int_n: out std_logic);
+end component;
+
+component ula_radas
+port (
+    clk28: in std_logic;
+    clkregs: in std_logic;  -- clock to load registers
+    clk14: in std_logic;    -- 14MHz master clock
+    clk7: in std_logic;
+    cpuclk: in std_logic;
+    CPUContention: out std_logic;
+    rst_n: in std_logic;  -- reset para volver al modo normal
+
+	 -- CPU
+    a : in std_logic_vector(15 downto 0);
+    mreq_n : in std_logic;
+    iorq_n : in std_logic;
+    rd_n : in std_logic;
+    wr_n : in std_logic;
+    int_n : out std_logic;
+    din: in std_logic_vector(7 downto 0);
+    dout: out std_logic_vector(7 downto 0);
+    rasterint_enable : in std_logic;
+    vretraceint_disable : in std_logic;
+    raster_line: in std_logic_vector(8 downto 0);
+    raster_int_in_progress: out std_logic;
+    
+	 -- VRAM 
+    va: out std_logic_vector(13 downto 0);  -- 16KB videoram
+    vramdata: in std_logic_vector(7 downto 0);
+
+    -- ZX-UNO register interface
+    zxuno_addr: in std_logic_vector(7 downto 0);
+    zxuno_regrd: in std_logic;
+    zxuno_regwr: in std_logic;
+    regaddr_changed: in std_logic;
+
+    -- I/O ports
+    ear: in std_logic;
+    kbd: in std_logic_vector(4 downto 0);
+    mic: out std_logic;
+    spk: out std_logic;
+    issue2_keyboard: in std_logic;
+    mode: in std_logic_vector(1 downto 0);
+    
+	 ioreqbank: in std_logic;
+    disable_contention: in std_logic;
+    access_to_contmem: in std_logic;
+    doc_ext_option: out std_logic;
+    enable_timexmmu: in std_logic;
+    disable_timexscr: in std_logic;
+    disable_ulaplus: in std_logic;
+    disable_radas: in std_logic;
+    csync_option: in std_logic;
+
+    -- Video
+    r: out std_logic_vector(2 downto 0);
+    g: out std_logic_vector(2 downto 0);
+    b: out std_logic_vector(2 downto 0);
+    hsync: out std_logic;
+    vsync: out std_logic;
+    csync: out std_logic;
+    y_n: out std_logic;
+	 
+	 hcnt_o : out std_logic_vector(8 downto 0);
+	 vcnt_o : out std_logic_vector(8 downto 0);
+	 invert_o : out std_logic;
+	 trdos_active : in std_logic;
+	 debug: out std_logic_vector(7 downto 0));
+end component;
+
+component vga_scandoubler 
+port (
+	 clkvideo : in std_logic;
+	 clkvga: in std_logic;
+    enable_scandoubling : in std_logic;
+    disable_scaneffect: in std_logic;  -- 1 to disable scanlines
+	 ri: in std_logic_vector(2 downto 0);
+	 gi: in std_logic_vector(2 downto 0);
+	 bi: in std_logic_vector(2 downto 0);
+	 hsync_ext_n: in std_logic;
+	 vsync_ext_n: in std_logic;
+	 csync_ext_n: in std_logic;
+	 ro: out std_logic_vector(2 downto 0);
+	 go: out std_logic_vector(2 downto 0);
+	 bo: out std_logic_vector(2 downto 0);
+	 hsync : out std_logic;
+	 vsync : out std_logic;
+	 blank: out std_logic
+   );
+end component;
+
 begin
 
 -- PLL
@@ -437,7 +591,7 @@ generic map (
 	IOWait		=> 1 )	-- 0 => Single cycle I/O, 1 => Std I/O cycle
 
 port map (
-	RESET_n		=> not reset,
+	RESET_n		=> cpu0_reset_n,
 	CLK_n		=> clk_bus,
 	ENA		=> cpuclk,
 	WAIT_n		=> cpu0_wait_n,
@@ -479,26 +633,26 @@ port map(
 );	
 	
 -- Video Spectrum/Pentagon
-U3: entity work.video
-port map (
-	CLK				=> clk_bus,
-	ENA				=> ena_7mhz,
-	INT				=> cpu0_int_n,
-	BORDER			=> vid_border,	-- Биты D0..D2 порта xxFE определяют цвет бордюра
-	TURBO 			=> not(cpu0_mult(0)),
-	ATTR_O			=> vid_attr,
-	A					=> vid_a_bus,
-	DI					=> vid_di_bus,
-	BLANK 			=> open,
-	RGB				=> vid_rgb,
-	HSYNC				=> vid_hsync,
-	VSYNC				=> vid_vsync,
-	INVERT_O 		=> vid_invert,
-	
-	HCNT_O 			=> vid_hcnt,
-	VCNT_O			=> vid_vcnt
-	
-	);
+--U3: entity work.video
+--port map (
+--	CLK				=> clk_bus,
+--	ENA				=> ena_7mhz,
+--	INT				=> cpu0_int_n,
+--	BORDER			=> vid_border,	-- Биты D0..D2 порта xxFE определяют цвет бордюра
+--	TURBO 			=> not(cpu0_mult(0)),
+--	ATTR_O			=> vid_attr,
+--	A					=> vid_a_bus,
+--	DI					=> vid_di_bus,
+--	BLANK 			=> open,
+--	RGB				=> vid_rgb,
+--	HSYNC				=> vid_hsync,
+--	VSYNC				=> vid_vsync,
+--	INVERT_O 		=> vid_invert,
+--	
+--	HCNT_O 			=> vid_hcnt,
+--	VCNT_O			=> vid_vcnt
+--	
+--	);
 	
 U3_1: entity work.osd
 port map (
@@ -509,9 +663,9 @@ port map (
 	HCNT_I => vid_hcnt,
 	VCNT_I => vid_vcnt,
 	PORT_1 => port_1ffd_reg,
-	PORT_2 => port_eff7_reg,
+	PORT_2 => divmmc_e3reg,
 	PORT_3 => port_7ffd_reg,
-	PORT_4 => port_dffd_reg	
+	PORT_4 => timexcfg_reg	
 );
 	
 -- Video memory
@@ -519,7 +673,7 @@ U4: entity work.altram1
 port map (
 	clock_a			=> clk_bus,
 	clock_b			=> clk_bus,
-	address_a		=> vid_scr & cpu0_a_bus(12 downto 0),
+	address_a		=> host_ram_a(15) & host_ram_a(13 downto 0),
 	address_b		=> port_7ffd_reg(3) & vid_a_bus,
 	data_a			=> cpu0_do_bus,
 	data_b			=> "11111111",
@@ -554,7 +708,7 @@ port map(
 -- Z-Controller
 U6: entity work.zcontroller
 port map (
-	RESET				=> reset,
+	RESET				=> not cpu0_reset_n,
 	CLK				=> clk_bus,
 	A					=> cpu0_a_bus(5),
 	DI					=> cpu0_do_bus,
@@ -573,7 +727,7 @@ U18: entity work.divmmc
 port map (
 	CLK		=> clk_bus,
 	EN		=> sd_mode,
-	RESET		=> reset,
+	RESET		=> not cpu0_reset_n,
 	ADDR		=> cpu0_a_bus,
 	DI		=> cpu0_do_bus,
 	DO		=> divmmc_do,
@@ -582,8 +736,10 @@ port map (
 	IORQ_N		=> cpu0_iorq_n,
 	MREQ_N		=> cpu0_mreq_n,
 	M1_N		=> cpu0_m1_n,
+--	I_RFSH_N		=> cpu0_rfsh_n,
 	E3REG		=> divmmc_e3reg,
 	AMAP		=> divmmc_amap,
+	
 	CS_N		=> divmmc_cs_n,
 	SCLK		=> divmmc_sclk,
 	MOSI		=> divmmc_mosi,
@@ -600,7 +756,7 @@ port map (
 	I_WR_N		=> cpu0_wr_n,
 	I_IORQ_N	=> cpu0_iorq_n,
 	I_M1_N		=> cpu0_m1_n,
-	I_RESET_N	=> not reset,
+	I_RESET_N	=> cpu0_reset_n,
 	O_SEL		=> ssg_sel,
 	-- ssg0
 	O_SSG0_DA	=> ssg_cn0_bus,
@@ -685,35 +841,39 @@ port map (
 	 
 -- Scan doubler
 U13 : entity work.scan_convert
-generic map (
-	-- mark active area of input video
-	cstart      	=>  46,  -- composite sync start -- 38
-	clength     	=> 352,  -- composite sync length
-	-- output video timing
-	hA					=>  24,	-- h front porch
-	hB					=>  32,	-- h sync
-	hC					=>  40,	-- h back porch
- 	hD					=> 352,	-- visible video
---	vA					=>   0,	-- v front porch (not used)
-	vB					=>   2,	-- v sync
-	vC					=>  10,	-- v back porch
-	vD					=> 284,	-- visible video
-	hpad				=>   0,	-- create H black border
-	vpad				=>   0	-- create V black border
-)
 port map (
 	I_VIDEO			=> vid_rgb_osd,
 	I_HSYNC			=> vid_hsync,
 	I_VSYNC			=> vid_vsync,
-	O_VIDEO(5 downto 4)	=> host_vga_r,
-	O_VIDEO(3 downto 2)	=> host_vga_g,
-	O_VIDEO(1 downto 0)	=> host_vga_b,
+	O_VIDEO(8 downto 6)	=> host_vga_r,
+	O_VIDEO(5 downto 3)	=> host_vga_g,
+	O_VIDEO(2 downto 0)	=> host_vga_b,
 	O_HSYNC			=> host_vga_hs,
 	O_VSYNC			=> host_vga_vs,
 	O_CMPBLK_N		=> host_vga_sblank,
-	CLK				=> clk7,
-	CLK_x2			=> clk14);
+	CLK				=> clk14,
+	CLK_x2			=> clk_bus);
 	
+--U13: vga_scandoubler 
+--port map(
+--	clkvideo => clk14,
+--	clkvga => clk_bus,
+--   enable_scandoubling => '1',
+--   disable_scaneffect => '1',  -- 1 to disable scanlines
+--	ri => vid_rgb_osd(8 downto 6),
+--	gi => vid_rgb_osd(5 downto 3),
+--	bi => vid_rgb_osd(2 downto 0),
+--	hsync_ext_n => vid_hsync,
+--	vsync_ext_n => vid_vsync,
+--   csync_ext_n => not (vid_hsync xor vid_vsync),
+--	ro => host_vga_r,
+--	go => host_vga_g,
+--	bo => host_vga_b,
+--	hsync => host_vga_hs,
+--	vsync => host_vga_vs, 
+--	blank => host_vga_sblank
+--   );
+--	
 -- HDMI output
 U14: entity work.hdmi
 generic map (
@@ -727,9 +887,9 @@ port map (
 	I_HSYNC			=> vga_hsync,
 	I_VSYNC			=> vga_vsync,
 	I_BLANK			=> not vga_blank,
-	I_RED				=> vga_r & vga_r & vga_r & vga_r,
-	I_GREEN			=> vga_g & vga_g & vga_g & vga_g,
-	I_BLUE			=> vga_b & vga_b & vga_b & vga_b,
+	I_RED				=> vga_r & vga_r & "00",
+	I_GREEN			=> vga_g & vga_g & "00",
+	I_BLUE			=> vga_b & vga_b & "00",
 	I_AUDIO_PCM_L 	=> audio_l,
 	I_AUDIO_PCM_R	=> audio_r,
 	O_TMDS			=> TMDS);
@@ -763,7 +923,7 @@ port map(
 U16: zxunoregs 
 port map(
 	clk => clk_bus, -- todo
-	rst_n => not reset,
+	rst_n => cpu0_reset_n,
 	a => cpu0_a_bus,
 	iorq_n => cpu0_iorq_n,
 	rd_n => cpu0_rd_n,
@@ -788,6 +948,88 @@ port map(
 	uart_tx => UART_TX,
 	uart_rx => UART_RX,
 	uart_rts => UART_RTS);
+	
+U19: rasterint_ctrl
+port map(
+	clk => clk_bus,
+	rst_n => cpu0_reset_n,
+	zxuno_addr => zxuno_addr,
+	zxuno_regrd => zxuno_regrd,
+	zxuno_regwr => zxuno_regwr,
+	din => cpu0_do_bus,
+	dout => rasterint_do_bus,
+	oe_n => rasterint_oe_n,
+	rasterint_enable => rasterint_enable,
+	vretraceint_disable => vretraceint_disable,
+	raster_line => raster_line,
+	raster_int_in_progress => raster_int_in_progress
+);
+
+U20: ula_radas 
+port map(
+	clk28 => clk_bus,
+	clkregs => clk_bus,
+	clk14 => clk14,
+	clk7 => clk7,
+	cpuclk => cpuclk,
+	CPUContention => cpu_contention,
+	rst_n => cpu0_reset_n,
+	
+	a => cpu0_a_bus,
+	mreq_n => cpu0_mreq_n,
+	iorq_n => cpu0_iorq_n,
+	rd_n => cpu0_rd_n,
+	wr_n => cpu0_wr_n,
+	int_n => cpu0_int_n,
+	din => cpu0_do_bus,
+	dout => ula_do_bus,
+	rasterint_enable => rasterint_enable,
+	vretraceint_disable => vretraceint_disable,
+	raster_line => raster_line,
+	raster_int_in_progress => raster_int_in_progress,
+	
+	va => vid_a_bus,
+	vramdata => vid_di_bus,
+	
+	zxuno_addr => zxuno_addr,
+	zxuno_regrd => zxuno_regrd,
+	zxuno_regwr => zxuno_regwr,
+	regaddr_changed => zxuno_regaddr_changed,
+	
+	ear => tape_in,
+	kbd => kb_do_bus,
+	mic => tape_out,
+	spk => speaker,	
+	issue2_keyboard => '0',
+	mode => "10", -- pentagon
+	ioreqbank => ioreqbank,
+	disable_contention => '1',
+	access_to_contmem => '0',
+	doc_ext_option => open,
+	enable_timexmmu => '1', -- ???? need more ext ram somehow mapped (see new_memory.v)
+	disable_timexscr => '0',
+	disable_ulaplus => '0',
+	disable_radas => '0',
+	csync_option => '1', -- todo ?
+	
+	r => vid_rgb(8 downto 6),
+	g => vid_rgb(5 downto 3),
+	b => vid_rgb(2 downto 0),
+	
+	hsync => vid_hsync,
+	vsync => vid_vsync,
+	csync => open,
+	y_n => open,
+	
+	hcnt_o => vid_hcnt,
+	vcnt_o => vid_vcnt,
+	invert_o => vid_invert,
+	trdos_active => dos_act,
+	debug => timexcfg_reg
+);
+
+ioreqbank <= '1' when (cpu0_iorq_n = '0' and (cpu0_wr_n = '0' or cpu0_rd_n = '0') and cs_7ffd = '1') else '0';
+
 	
 -------------------------------------------------------------------------------
 -- Global signals
@@ -886,14 +1128,14 @@ cs_7ffd <= '1' when cpu0_iorq_n = '0' and cpu0_m1_n = '1' and cpu0_a_bus = X"7FF
 cs_xxfd <= '1' when cpu0_iorq_n = '0' and cpu0_m1_n = '1' and cpu0_a_bus(15) = '0' and cpu0_a_bus(1) = '0' and fd_port = '0' else '0';
 
 
-process (reset, areset, clk_bus, cpu0_a_bus, dos_act, cs_xxfe, cs_eff7, cs_dff7, cs_7ffd, cs_1ffd, cs_xxfd, port_7ffd_reg, port_1ffd_reg, cpu0_mreq_n, cpu0_m1_n, cpu0_wr_n, cpu0_do_bus, fd_port)
+process (reset, areset, clk_bus, cpu0_a_bus, dos_act, cs_xxfe, cs_eff7, cs_dff7, cs_7ffd, cs_1ffd, cs_xxfd, port_7ffd_reg, port_1ffd_reg, cpu0_mreq_n, cpu0_m1_n, cpu0_wr_n, cpu0_do_bus, fd_port, sd_mode)
 begin
 	if reset = '1' then
 		port_eff7_reg <= (others => '0');
 		port_7ffd_reg <= (others => '0');
 		port_dffd_reg <= (others => '0');
 		port_1ffd_reg <= (others => '0');--(7 downto 2) <= (others => '0'); -- skip turbo / memlock bits on reset
-		dos_act <= '1';
+		dos_act <= not sd_mode;
 	elsif clk_bus'event and clk_bus = '1' then
 
 		-- #FE
@@ -967,8 +1209,8 @@ ETH_NCS <= '1';
 -- Audio mixer
 
 -- 16bit Delta-Sigma DAC
-audio_l <= "0000000000000000" when loader_act = '1' else ("000" & port_xxfe_reg(4) & "000000000000") + ("000" & ssg_cn0_a & "00000") + ("000" & ssg_cn0_b & "00000") + ("000" & ssg_cn1_a & "00000") + ("000" & ssg_cn1_b & "00000") + ("000" & covox_a   & "00000") + ("000" & covox_b   & "00000") + ("000" & saa_out_l & "00000");
-audio_r <= "0000000000000000" when loader_act = '1' else ("000" & port_xxfe_reg(4) & "000000000000") + ("000" & ssg_cn0_c & "00000") + ("000" & ssg_cn0_b & "00000") + ("000" & ssg_cn1_c & "00000") + ("000" & ssg_cn1_b & "00000") + ("000" & covox_c   & "00000") + ("000" & covox_d   & "00000") + ("000" & saa_out_r & "00000");
+audio_l <= "0000000000000000" when loader_act = '1' else ("000" & speaker & "000000000000") + ("000" & ssg_cn0_a & "00000") + ("000" & ssg_cn0_b & "00000") + ("000" & ssg_cn1_a & "00000") + ("000" & ssg_cn1_b & "00000") + ("000" & covox_a   & "00000") + ("000" & covox_b   & "00000") + ("000" & saa_out_l & "00000");
+audio_r <= "0000000000000000" when loader_act = '1' else ("000" & speaker & "000000000000") + ("000" & ssg_cn0_c & "00000") + ("000" & ssg_cn0_b & "00000") + ("000" & ssg_cn1_c & "00000") + ("000" & ssg_cn1_b & "00000") + ("000" & covox_c   & "00000") + ("000" & covox_d   & "00000") + ("000" & saa_out_r & "00000");
 
 -- SAA1099
 saa_wr_n <= '0' when (cpu0_iorq_n = '0' and cpu0_wr_n = '0' and cpu0_a_bus(7 downto 0) = "11111111" and dos_act = '0') else '1';
@@ -984,12 +1226,12 @@ zc_rd 		<= '1' when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_a_bus(7 down
 -------------------------------------------------------------------------------
 -- CPU0 Data bus
 
-process (selector, host_ram_do, mc146818_do_bus, kb_do_bus, zc_do_bus, ssg_cn0_bus, ssg_cn1_bus, port_7ffd_reg, vid_attr, port_eff7_reg)
+process (selector, host_ram_do, mc146818_do_bus, kb_do_bus, zc_do_bus, ssg_cn0_bus, ssg_cn1_bus, port_7ffd_reg, vid_attr, port_eff7_reg, port_1ffd_reg, joy_bus, ms_z, ms_b, ms_x, ms_y, divmmc_do, zxuno_addr_to_cpu, uart_do_bus, rasterint_do_bus, ula_do_bus)
 begin
 	case selector is
 		when x"00" => cpu0_di_bus <= host_ram_do;
 		when x"01" => cpu0_di_bus <= mc146818_do_bus;
-		when x"02" => cpu0_di_bus <= "111" & kb_do_bus;
+--		when x"02" => cpu0_di_bus <= "111" & kb_do_bus;
 		when x"03" => cpu0_di_bus <= zc_do_bus;
 		when x"04" => cpu0_di_bus <= "000" & joy_bus;
 		when x"05" => cpu0_di_bus <= ssg_cn0_bus;
@@ -1004,14 +1246,16 @@ begin
 		when x"0E" => cpu0_di_bus <= zxuno_addr_to_cpu;
 		when x"0F" => cpu0_di_bus <= uart_do_bus;
 --		when x"11" => cpu0_di_bus <= vid_attr;
-		when others  => cpu0_di_bus <= (others => '1');
+		when x"12" => cpu0_di_bus <= rasterint_do_bus;
+		when x"FF" => cpu0_di_bus <= ula_do_bus;
+		when others => null;
 	end case;
 end process;
 
 selector <= 
 			x"00" when (cpu0_mreq_n = '0' and cpu0_rd_n = '0') else 																									-- SDRAM
 			x"01" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_m1_n = '1' and port_bff7 = '1' and port_eff7_reg(7) = '1') else 									-- MC146818A
-			x"02" when (cs_xxfe = '1' and cpu0_rd_n = '0') else 													-- Keyboard, port #FE
+--			x"02" when (cs_xxfe = '1' and cpu0_rd_n = '0') else 													-- Keyboard, port #FE
 			x"03" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_m1_n = '1' and cpu0_a_bus( 7 downto 6) = "01" and cpu0_a_bus(4 downto 0) = "10111") and sd_mode = '0' else 	-- Z-Controller
 			x"04" when (cpu0_iorq_n = '0' and cpu0_rd_n = '0' and cpu0_m1_n = '1' and cpu0_a_bus( 7 downto 0) = X"1F" and dos_act = '0') else 							-- Joystick, port #1F
 			x"05" when (cs_fffd = '1' and cpu0_rd_n = '0' and ssg_sel = '0') else -- TurboSound
@@ -1027,13 +1271,15 @@ selector <=
 			x"0F" when uart_oe_n = '0' else -- UART
 --			x"10" when (cs_xxff = '1' and cpu0_rd_n = '0' and is_port_ff = '1') else 		-- port #FF (Timex)
 --			x"11" when (cs_xxff = '1' and cpu0_rd_n = '0' and is_port_ff = '0') else 		-- port #FF (normal)
+		   x"12" when rasterint_oe_n = '0' else -- raster interrupt
 			(others => '1');
 
 -------------------------------------------------------------------------------
 -- Video
 
-vid_wr	<= '1' when cpu0_mreq_n = '0' and cpu0_wr_n = '0' and ((ram_a_bus = "000000001010") or (ram_a_bus = "000000001110")) else '0'; 
-vid_scr	<= '1' when (ram_a_bus = "000000001110") else '0';
+--vid_wr	<= '1' when cpu0_mreq_n = '0' and cpu0_wr_n = '0' and ((ram_a_bus = "000000001010") or (ram_a_bus = "000000001110")) else '0'; 
+vid_wr <= '1' when cpu0_mreq_n = '0' and cpu0_wr_n = '0' and host_ram_a(24 downto 16) = 1 and host_ram_a(14) = '1' else '0';
+--vid_scr	<= '1' when (ram_a_bus = "000000001110") else '0';
 
 vga_r <= host_vga_r;
 vga_g <= host_vga_g;

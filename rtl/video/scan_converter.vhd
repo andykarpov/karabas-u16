@@ -42,28 +42,27 @@ library ieee;
 
 entity scan_convert is
 	generic (
-		cstart		: integer range 0 to 1023 := 144;	-- composite sync start
-		clength		: integer range 0 to 1023 := 640;	-- composite sync length
-
-		hA				: integer range 0 to 1023 :=  16;	-- h front porch
-		hB				: integer range 0 to 1023 :=  96;	-- h sync
-		hC				: integer range 0 to 1023 :=  48;	-- h back porch
-		hD				: integer range 0 to 1023 := 640;	-- visible video
-
---		vA				: integer range 0 to 1023 :=  16;	-- v front porch
-		vB				: integer range 0 to 1023 :=   2;	-- v sync
-		vC				: integer range 0 to 1023 :=  33;	-- v back porch
-		vD				: integer range 0 to 1023 := 480;	-- visible video
-
-		hpad			: integer range 0 to 1023 :=   0;	-- H black border
-		vpad			: integer range 0 to 1023 :=   0		-- V black border
+		-- mark active area of input video
+		cstart      	: integer range 0 to 1023 := 92;  -- composite sync start
+		clength     	: integer range 0 to 1023 := 704;  -- composite sync length
+		-- output video timing
+		hA					: integer range 0 to 1023 := 48;	-- h front porch
+		hB					: integer range 0 to 1023 := 64;	-- h sync
+		hC					: integer range 0 to 1023 := 80;	-- h back porch
+		hD					: integer range 0 to 1023 := 704;	-- visible video
+	--	vA					: integer range 0 to 1023 :=  0;	-- v front porch (not used)
+		vB					: integer range 0 to 1023 :=  2;	-- v sync
+		vC					: integer range 0 to 1023 := 10;	-- v back porch
+		vD					: integer range 0 to 1023 := 296;-- visible video - old 284
+		hpad				: integer range 0 to 1023 :=  0;	-- create H black border
+		vpad				: integer range 0 to 1023 :=  0	-- create V black border -- todo!!!
 	);
 	port (
-		I_VIDEO				: in  std_logic_vector(5 downto 0);
+		I_VIDEO				: in  std_logic_vector(8 downto 0);
 		I_HSYNC				: in  std_logic;
 		I_VSYNC				: in  std_logic;
 		--
-		O_VIDEO				: out std_logic_vector(5 downto 0);
+		O_VIDEO				: out std_logic_vector(8 downto 0);
 		O_HSYNC				: out std_logic;
 		O_VSYNC				: out std_logic;
 		O_CMPBLK_N			: out std_logic;
@@ -79,16 +78,16 @@ architecture RTL of scan_convert is
 	--
 	signal ivsync_last_x2	: std_logic := '1';
 	signal ihsync_last		: std_logic := '1';
-	signal hpos_i			: std_logic_vector( 9 downto 0) := (others => '0');
+	signal hpos_i			: std_logic_vector(9 downto 0) := (others => '0');
 
 	--
 	-- output timing
 	--
 	signal hpos_o			: std_logic_vector(9 downto 0) := (others => '0');
 
-	signal vcnt				: integer range 0 to 1023 := 0;
-	signal hcnt				: integer range 0 to 1023 := 0;
-	signal hcnti			: integer range 0 to 1023 := 0;
+	signal vcnt				: integer range 0 to 2047 := 0;
+	signal hcnt				: integer range 0 to 2047 := 0;
+	signal hcnti			: integer range 0 to 2047 := 0;
 
 begin
 	-- dual port line buffer, max line of 1024 pixels
@@ -97,12 +96,12 @@ begin
 		clock_a	 	=> CLK_x2,
 		address_a	=> hpos_i,
 		data_a		=> I_VIDEO,
-		wren_a	 	=> CLK, -- todo
+		wren_a	 	=> CLK,
 		q_a	 		=> open,
 		--
 		clock_b	 	=> CLK_x2,
 		address_b	=> hpos_o,
-		data_b	 	=> "000000",
+		data_b	 	=> "000000000",
 		wren_b	 	=> '0',
 		q_b	 		=> O_VIDEO
 	);

@@ -7,8 +7,8 @@ entity osd is
 	port (
 		CLK		: in std_logic;
 		
-		RGB_I 	: in std_logic_vector(5 downto 0);
-		RGB_O 	: out std_logic_vector(5 downto 0);
+		RGB_I 	: in std_logic_vector(8 downto 0);
+		RGB_O 	: out std_logic_vector(8 downto 0);
 
 		-- debug ports to display
 		PORT_1   : in std_logic_vector(7 downto 0);
@@ -27,7 +27,7 @@ architecture rtl of osd is
 
 	signal hcnt : std_logic_vector(8 downto 0);
 	signal vcnt : std_logic_vector(8 downto 0);
-	signal rgb  : std_logic_vector(5 downto 0);
+	signal rgb  : std_logic_vector(8 downto 0);
 	
 	signal hpos1 : std_logic_vector(7 downto 0);
 	signal hpos2 : std_logic_vector(7 downto 0);
@@ -59,7 +59,7 @@ begin
 	vpos(1) <= '1' when vcnt >= 280 and vcnt < 284 else '0';
 	vpos(0) <= '1' when vcnt >= 288 and vcnt < 292 else '0';
 	
-	rgb <= "001100" when -- green = ON 
+	rgb <= "000111000" when -- green = ON 
 		(vpos(1) = '1' and (
 			(hpos1(7) = '1' and PORT_1(7) = '1') or 
 			(hpos1(6) = '1' and PORT_1(6) = '1') or 
@@ -100,7 +100,7 @@ begin
 			(hpos2(0) = '1' and PORT_4(0) = '1') 
 		))
 	else 
-		"110000" when -- red = OFF
+		"111000000" when -- red = OFF
 		(vpos(1) = '1' and (
 			(hpos1(7) = '1' and PORT_1(7) = '0') or 
 			(hpos1(6) = '1' and PORT_1(6) = '0') or 
@@ -141,7 +141,7 @@ begin
 			(hpos2(0) = '1' and PORT_4(0) = '0') 
 		))
 	else 
-		RGB_I(5 downto 0);
+		RGB_I(8 downto 0);
 
 	RGB_O <= rgb when EN = '1' else RGB_I;			
 
